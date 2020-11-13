@@ -76,8 +76,6 @@ void ogs_sbi_server_send_error(ogs_sbi_session_t *session,
 void ogs_sbi_server_send_problem(
         ogs_sbi_session_t *session, OpenAPI_problem_details_t *problem);
 
-void ogs_sbi_session_set_data(ogs_sbi_session_t *session, void *data);
-void *ogs_sbi_session_get_data(ogs_sbi_session_t *session);
 ogs_sbi_server_t *ogs_sbi_session_get_server(ogs_sbi_session_t *session);
 
 #ifdef __cplusplus
