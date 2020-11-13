@@ -25,7 +25,7 @@ libsbi_sources = files('''
     conv.c
     message.c
 
-    mhd-server.c
+    server.c
     client.c
     context.c
 
