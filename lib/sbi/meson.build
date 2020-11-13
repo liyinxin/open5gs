@@ -40,6 +40,7 @@ libsbi_inc = include_directories('.')
 sbi_cc_flags = ['-DOGS_SBI_COMPILATION']
 
 libgnutls_dep = cc.find_library('gnutls', required : true)
+libnghttp2_dep = dependency('libnghttp2', version: '>=0.1.33')
 libmicrohttpd_dep = dependency('libmicrohttpd', version: '>=0.9.40')
 libcurl_dep = dependency('libcurl')
 
@@ -53,6 +54,7 @@ libsbi = library('ogssbi',
                     libapp_dep,
                     libsbi_openapi_dep,
                     libgnutls_dep,
+                    libnghttp2_dep,
                     libmicrohttpd_dep,
                     libcurl_dep],
     install_rpath : libdir,
@@ -66,5 +68,6 @@ libsbi_dep = declare_dependency(
                     libapp_dep,
                     libsbi_openapi_dep,
                     libgnutls_dep,
+                    libnghttp2_dep,
                     libmicrohttpd_dep,
                     libcurl_dep])
