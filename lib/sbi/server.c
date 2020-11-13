@@ -28,7 +28,7 @@ typedef enum MHD_Result _MHD_Result;
 typedef int _MHD_Result;
 #endif
 
-typedef struct ogs_sbi_session_s {
+typedef struct ogs_mhd_session_s {
     ogs_lnode_t             lnode;
 
     struct MHD_Connection   *connection;
@@ -52,10 +52,10 @@ typedef struct ogs_sbi_session_s {
     ogs_timer_t             *timer;
 
     void *data;
-} ogs_sbi_session_t;
+} ogs_mhd_session_t;
 
 static OGS_POOL(server_pool, ogs_sbi_server_t);
-static OGS_POOL(session_pool, ogs_sbi_session_t);
+static OGS_POOL(session_pool, ogs_mhd_session_t);
 
 static void run(short when, ogs_socket_t fd, void *data);
 static void notify_connection(void *cls,
@@ -94,84 +94,84 @@ void ogs_sbi_server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static ogs_sbi_session_t *session_add(ogs_sbi_server_t *server,
+static ogs_mhd_session_t *session_add(ogs_sbi_server_t *server,
         ogs_sbi_request_t *request, struct MHD_Connection *connection)
 {
-    ogs_sbi_session_t *session = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(request);
     ogs_assert(connection);
 
-    ogs_pool_alloc(&session_pool, &session);
-    ogs_assert(session);
-    memset(session, 0, sizeof(ogs_sbi_session_t));
+    ogs_pool_alloc(&session_pool, &mhd_sess);
+    ogs_assert(mhd_sess);
+    memset(mhd_sess, 0, sizeof(ogs_mhd_session_t));
 
-    session->server = server;
-    session->request = request;
-    session->connection = connection;
+    mhd_sess->server = server;
+    mhd_sess->request = request;
+    mhd_sess->connection = connection;
 
-    session->timer = ogs_timer_add(
-            ogs_app()->timer_mgr, session_timer_expired, session);
-    ogs_assert(session->timer);
+    mhd_sess->timer = ogs_timer_add(
+            ogs_app()->timer_mgr, session_timer_expired, mhd_sess);
+    ogs_assert(mhd_sess->timer);
 
     /* If User does not send http response within deadline,
      * Open5GS will assert this program. */
-    ogs_timer_start(session->timer,
+    ogs_timer_start(mhd_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
 
-    ogs_list_add(&server->suspended_session_list, session);
+    ogs_list_add(&server->suspended_session_list, mhd_sess);
 
-    return session;
+    return mhd_sess;
 }
 
-static void session_remove(ogs_sbi_session_t *session)
+static void session_remove(ogs_mhd_session_t *mhd_sess)
 {
     struct MHD_Connection *connection;
     ogs_sbi_server_t *server = NULL;
 
-    ogs_assert(session);
-    server = session->server;
+    ogs_assert(mhd_sess);
+    server = mhd_sess->server;
     ogs_assert(server);
 
-    ogs_list_remove(&server->suspended_session_list, session);
+    ogs_list_remove(&server->suspended_session_list, mhd_sess);
 
-    ogs_assert(session->timer);
-    ogs_timer_delete(session->timer);
+    ogs_assert(mhd_sess->timer);
+    ogs_timer_delete(mhd_sess->timer);
 
-    connection = session->connection;
+    connection = mhd_sess->connection;
     ogs_assert(connection);
 
     MHD_resume_connection(connection);
 
-    ogs_pool_free(&session_pool, session);
+    ogs_pool_free(&session_pool, mhd_sess);
 }
 
 static void session_timer_expired(void *data)
 {
-    ogs_sbi_session_t *session = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
-    session = data;
-    ogs_assert(session);
+    mhd_sess = data;
+    ogs_assert(mhd_sess);
 
     ogs_fatal("An HTTP request was received, "
                 "but the HTTP response is missing.");
     ogs_fatal("Please send the related pcap files for this case.");
 
-    session_remove(session);
+    session_remove(mhd_sess);
 
     ogs_assert_if_reached();
 }
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    ogs_sbi_session_t *session = NULL, *next_session = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL, *next_mhd_sess = NULL;
 
     ogs_assert(server);
 
     ogs_list_for_each_safe(
-            &server->suspended_session_list, next_session, session)
-        session_remove(session);
+            &server->suspended_session_list, next_mhd_sess, mhd_sess)
+        session_remove(mhd_sess);
 }
 
 ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr)
@@ -346,14 +346,16 @@ void ogs_sbi_server_send_response(
     struct MHD_Daemon *mhd_daemon = NULL;
     const union MHD_ConnectionInfo *mhd_info = NULL;
     MHD_socket mhd_socket = INVALID_SOCKET;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     ogs_hash_index_t *hi;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(response);
 
-    ogs_assert(session);
-    connection = session->connection;
+    mhd_sess = (ogs_mhd_session_t *)session;
+    ogs_assert(mhd_sess);
+    connection = mhd_sess->connection;
     ogs_assert(connection);
 
     mhd_info = MHD_get_connection_info(
@@ -387,11 +389,11 @@ void ogs_sbi_server_send_response(
     }
 
     status = response->status;
-    request = session->request;
+    request = mhd_sess->request;
     ogs_assert(request);
 
     ogs_sbi_response_free(response);
-    session_remove(session);
+    session_remove(mhd_sess);
 
     request->poll = ogs_pollset_add(ogs_app()->pollset,
                     OGS_POLLOUT, mhd_socket, run, mhd_daemon);
@@ -529,6 +531,7 @@ static _MHD_Result access_handler(
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_session_t *session = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     server = cls;
     ogs_assert(server);
@@ -602,7 +605,9 @@ suspend:
     MHD_suspend_connection(connection);
     request->suspended = true;
 
-    session = session_add(server, request, connection);
+    mhd_sess = session_add(server, request, connection);
+    ogs_assert(mhd_sess);
+    session = (ogs_sbi_session_t *)mhd_sess;
     ogs_assert(session);
 
     if (server->cb) {
@@ -641,8 +646,11 @@ static void notify_completed(
 
 ogs_sbi_server_t *ogs_sbi_session_get_server(ogs_sbi_session_t *session)
 {
-    ogs_assert(session);
-    ogs_assert(session->server);
+    ogs_mhd_session_t *mhd_sess = NULL;
 
-    return session->server;
+    mhd_sess = (ogs_mhd_session_t *)session;
+    ogs_assert(mhd_sess);
+    ogs_assert(mhd_sess->server);
+
+    return mhd_sess->server;
 }
