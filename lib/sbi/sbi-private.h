@@ -20,11 +20,32 @@
 #ifndef OGS_SBI_PRIVATE_H
 #define OGS_SBI_PRIVATE_H
 
-#include "yuarel.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "mhd-server.h"
+
+typedef struct ogs_sbi_server_s {
+    ogs_lnode_t     lnode;                  /* A node of list_t */
+
+    ogs_sockaddr_t  *addr;                  /* Listen socket address */
+
+    struct {
+        const char  *key;
+        const char  *pem;
+    } tls;
+
+    int (*cb)(ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_request_t *request);
+    void *data;
+
+    ogs_list_t      suspended_session_list; /* MHD suspended list */
+
+    void            *mhd;                   /* MHD instance */
+    ogs_poll_t      *poll;                  /* MHD server poll */
+
+} ogs_sbi_server_t;
 
 #ifdef __cplusplus
 }

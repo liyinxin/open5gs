@@ -20,6 +20,8 @@
 #include "ogs-app.h"
 #include "ogs-sbi.h"
 
+#include "sbi-private.h"
+
 static OGS_POOL(server_pool, ogs_sbi_server_t);
 
 void ogs_sbi_server_init(int num_of_session_pool)

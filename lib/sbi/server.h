@@ -24,11 +24,12 @@
 #ifndef OGS_SBI_SERVER_H
 #define OGS_SBI_SERVER_H
 
-#include "mhd-server.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct ogs_sbi_server_s ogs_sbi_server_t;
+typedef struct ogs_sbi_session_s ogs_sbi_session_t;
 
 void ogs_sbi_server_init(int num_of_connection_pool);
 void ogs_sbi_server_final(void);

@@ -20,6 +20,8 @@
 #include "app/ogs-app.h"
 #include "ogs-sbi.h"
 
+#include "sbi-private.h"
+
 int __ogs_sbi_domain;
 
 static OGS_POOL(nf_instance_pool, ogs_sbi_nf_instance_t);
