@@ -82,14 +82,10 @@ static void session_timer_expired(void *data);
 
 void ogs_mhd_server_init(int num_of_session_pool)
 {
-    ogs_list_init(&ogs_sbi_self()->server_list);
-
     ogs_pool_init(&session_pool, num_of_session_pool);
 }
 void ogs_mhd_server_final(void)
 {
-    ogs_sbi_server_remove_all();
-
     ogs_pool_final(&session_pool);
 }
 
