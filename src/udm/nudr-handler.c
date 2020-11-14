@@ -60,7 +60,7 @@ bool udm_nudr_dr_handle_subscription_authentication(
 
     ogs_assert(udm_ue);
     ogs_assert(session);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(server);
 
     ogs_assert(recvmsg);
@@ -265,7 +265,7 @@ bool udm_nudr_dr_handle_subscription_context(
 
     ogs_assert(udm_ue);
     ogs_assert(session);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(server);
 
     ogs_assert(recvmsg);
@@ -340,7 +340,7 @@ bool udm_nudr_dr_handle_subscription_provisioned(
 
     ogs_assert(udm_ue);
     ogs_assert(session);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(server);
 
     ogs_assert(recvmsg);

@@ -63,7 +63,7 @@ void ogs_sbi_server_remove(ogs_sbi_server_t *server)
 
     ogs_list_remove(&ogs_sbi_self()->server_list, server);
 
-    ogs_sbi_server_stop(server);
+    ogs_mhd_server_stop(server);
 
     ogs_assert(server->addr);
     ogs_freeaddrinfo(server->addr);
@@ -77,4 +77,86 @@ void ogs_sbi_server_remove_all(void)
 
     ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
         ogs_sbi_server_remove(server);
+}
+
+void ogs_sbi_server_start_all(int (*cb)(
+            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_request_t *request))
+{
+    ogs_sbi_server_t *server = NULL, *next_server = NULL;
+
+    ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
+        ogs_mhd_server_start(server, cb);
+}
+
+void ogs_sbi_server_stop_all(void)
+{
+    ogs_sbi_server_t *server = NULL, *next_server = NULL;
+
+    ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
+        ogs_mhd_server_stop(server);
+}
+
+void ogs_sbi_server_send_response(
+        ogs_sbi_session_t *session, ogs_sbi_response_t *response)
+{
+    ogs_mhd_server_send_response(session, response);
+}
+
+void ogs_sbi_server_send_problem(
+        ogs_sbi_session_t *session, OpenAPI_problem_details_t *problem)
+{
+    ogs_sbi_message_t message;
+    ogs_sbi_response_t *response = NULL;
+
+    ogs_assert(session);
+    ogs_assert(problem);
+
+    memset(&message, 0, sizeof(message));
+
+    message.http.content_type = (char*)"application/problem+json";
+    message.ProblemDetails = problem;
+
+    response = ogs_sbi_build_response(&message, problem->status);
+    ogs_assert(response);
+
+    ogs_sbi_server_send_response(session, response);
+}
+
+void ogs_sbi_server_send_error(ogs_sbi_session_t *session,
+        int status, ogs_sbi_message_t *message,
+        const char *title, const char *detail)
+{
+    OpenAPI_problem_details_t problem;
+
+    ogs_assert(session);
+
+    memset(&problem, 0, sizeof(problem));
+
+    if (message) {
+        problem.type = ogs_msprintf("/%s/%s",
+                message->h.service.name, message->h.api.version);
+        if (message->h.resource.component[1])
+            problem.instance = ogs_msprintf("/%s/%s",
+                    message->h.resource.component[0],
+                    message->h.resource.component[1]);
+        else
+            problem.instance =
+                    ogs_msprintf("/%s", message->h.resource.component[0]);
+    }
+    problem.status = status;
+    problem.title = (char*)title;
+    problem.detail = (char*)detail;
+
+    ogs_sbi_server_send_problem(session, &problem);
+
+    if (problem.type)
+        ogs_free(problem.type);
+    if (problem.instance)
+        ogs_free(problem.instance);
+}
+
+ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_session_t *session)
+{
+    return ogs_mhd_server_from_session(session);
 }

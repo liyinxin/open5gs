@@ -239,7 +239,7 @@ bool nrf_nnrf_handle_nf_list_retrieval(
     OpenAPI_lnode_t *node = NULL;
 
     ogs_assert(session);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(recvmsg);
 
     links = ogs_calloc(1, sizeof(*links));

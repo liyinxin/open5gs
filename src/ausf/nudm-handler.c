@@ -52,7 +52,7 @@ bool ausf_nudm_ueau_handle_get(ausf_ue_t *ausf_ue,
 
     ogs_assert(ausf_ue);
     ogs_assert(session);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(server);
 
     ogs_assert(recvmsg);

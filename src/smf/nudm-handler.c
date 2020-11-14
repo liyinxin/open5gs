@@ -58,7 +58,7 @@ bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_session_t *session,
     ogs_assert(session);
     smf_ue = sess->smf_ue;
     ogs_assert(smf_ue);
-    server = ogs_sbi_session_get_server(session);
+    server = ogs_sbi_server_from_session(session);
     ogs_assert(server);
 
     ogs_assert(recvmsg);
