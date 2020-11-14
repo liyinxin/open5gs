@@ -33,6 +33,10 @@ extern "C" {
 void ogs_sbi_server_init(int num_of_connection_pool);
 void ogs_sbi_server_final(void);
 
+ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr);
+void ogs_sbi_server_remove(ogs_sbi_server_t *server);
+void ogs_sbi_server_remove_all(void);
+
 #ifdef __cplusplus
 }
 #endif

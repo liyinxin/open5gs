@@ -54,7 +54,6 @@ typedef struct ogs_mhd_session_s {
     void *data;
 } ogs_mhd_session_t;
 
-static OGS_POOL(server_pool, ogs_sbi_server_t);
 static OGS_POOL(session_pool, ogs_mhd_session_t);
 
 static void run(short when, ogs_socket_t fd, void *data);
@@ -82,7 +81,6 @@ static void session_timer_expired(void *data);
 void ogs_mhd_server_init(int num_of_session_pool)
 {
     ogs_list_init(&ogs_sbi_self()->server_list);
-    ogs_pool_init(&server_pool, ogs_app()->pool.nf);
 
     ogs_pool_init(&session_pool, num_of_session_pool);
 }
@@ -90,7 +88,6 @@ void ogs_mhd_server_final(void)
 {
     ogs_sbi_server_remove_all();
 
-    ogs_pool_final(&server_pool);
     ogs_pool_final(&session_pool);
 }
 
@@ -172,46 +169,6 @@ static void session_remove_all(ogs_sbi_server_t *server)
     ogs_list_for_each_safe(
             &server->suspended_session_list, next_mhd_sess, mhd_sess)
         session_remove(mhd_sess);
-}
-
-ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr)
-{
-    ogs_sbi_server_t *server = NULL;
-
-    ogs_assert(addr);
-
-    ogs_pool_alloc(&server_pool, &server);
-    ogs_assert(server);
-    memset(server, 0, sizeof(ogs_sbi_server_t));
-
-    ogs_list_init(&server->suspended_session_list);
-    ogs_copyaddrinfo(&server->addr, addr);
-
-    ogs_list_add(&ogs_sbi_self()->server_list, server);
-
-    return server;
-}
-
-void ogs_sbi_server_remove(ogs_sbi_server_t *server)
-{
-    ogs_assert(server);
-
-    ogs_list_remove(&ogs_sbi_self()->server_list, server);
-
-    ogs_sbi_server_stop(server);
-
-    ogs_assert(server->addr);
-    ogs_freeaddrinfo(server->addr);
-
-    ogs_pool_free(&server_pool, server);
-}
-
-void ogs_sbi_server_remove_all(void)
-{
-    ogs_sbi_server_t *server = NULL, *next_server = NULL;
-
-    ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
-        ogs_sbi_server_remove(server);
 }
 
 void ogs_sbi_server_start(ogs_sbi_server_t *server, int (*cb)(

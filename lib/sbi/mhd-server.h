@@ -55,10 +55,6 @@ typedef struct ogs_sbi_server_s {
 void ogs_mhd_server_init(int num_of_connection_pool);
 void ogs_mhd_server_final(void);
 
-ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr);
-void ogs_sbi_server_remove(ogs_sbi_server_t *server);
-void ogs_sbi_server_remove_all(void);
-
 void ogs_sbi_server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_server_t *server, ogs_sbi_session_t *session,
             ogs_sbi_request_t *request));
