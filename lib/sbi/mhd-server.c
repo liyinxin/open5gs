@@ -79,14 +79,14 @@ static void notify_completed(
 
 static void session_timer_expired(void *data);
 
-void ogs_sbi_server_init(int num_of_session_pool)
+void ogs_mhd_server_init(int num_of_session_pool)
 {
     ogs_list_init(&ogs_sbi_self()->server_list);
     ogs_pool_init(&server_pool, ogs_app()->pool.nf);
 
     ogs_pool_init(&session_pool, num_of_session_pool);
 }
-void ogs_sbi_server_final(void)
+void ogs_mhd_server_final(void)
 {
     ogs_sbi_server_remove_all();
 
