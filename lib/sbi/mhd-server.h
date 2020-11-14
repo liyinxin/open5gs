@@ -21,8 +21,8 @@
 #error "This header cannot be included directly."
 #endif
 
-#ifndef OGS_SBI_SERVER_H
-#define OGS_SBI_SERVER_H
+#ifndef OGS_MHD_SERVER_H
+#define OGS_MHD_SERVER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -82,4 +82,4 @@ ogs_sbi_server_t *ogs_sbi_session_get_server(ogs_sbi_session_t *session);
 }
 #endif
 
-#endif /* OGS_SBI_SERVER_H */
+#endif /* OGS_MHD_SERVER_H */
