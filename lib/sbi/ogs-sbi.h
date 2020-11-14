@@ -72,7 +72,6 @@
 #include "sbi/message.h"
 
 #include "sbi/server.h"
-#include "sbi/mhd-server.h"
 #include "sbi/client.h"
 #include "sbi/context.h"
 

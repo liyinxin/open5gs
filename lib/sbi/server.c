@@ -20,11 +20,20 @@
 #include "ogs-app.h"
 #include "ogs-sbi.h"
 
+extern const ogs_sbi_server_actions_t ogs_mhd_server_actions;
+
+ogs_sbi_server_actions_t ogs_sbi_server_actions;
+bool ogs_sbi_server_actions_initialized = false;
+
 static OGS_POOL(server_pool, ogs_sbi_server_t);
 
 void ogs_sbi_server_init(int num_of_session_pool)
 {
-    ogs_mhd_server_init(num_of_session_pool);
+    if (ogs_sbi_server_actions_initialized == false) {
+        ogs_sbi_server_actions = ogs_mhd_server_actions;
+    }
+
+    ogs_sbi_server_actions.init(num_of_session_pool);
 
     ogs_list_init(&ogs_sbi_self()->server_list);
     ogs_pool_init(&server_pool, ogs_app()->pool.nf);
@@ -36,7 +45,7 @@ void ogs_sbi_server_final(void)
 
     ogs_pool_final(&server_pool);
 
-    ogs_mhd_server_final();
+    ogs_sbi_server_actions.cleanup();
 }
 
 ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr)
@@ -63,7 +72,7 @@ void ogs_sbi_server_remove(ogs_sbi_server_t *server)
 
     ogs_list_remove(&ogs_sbi_self()->server_list, server);
 
-    ogs_mhd_server_stop(server);
+    ogs_sbi_server_actions.stop(server);
 
     ogs_assert(server->addr);
     ogs_freeaddrinfo(server->addr);
@@ -86,7 +95,7 @@ void ogs_sbi_server_start_all(int (*cb)(
     ogs_sbi_server_t *server = NULL, *next_server = NULL;
 
     ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
-        ogs_mhd_server_start(server, cb);
+        ogs_sbi_server_actions.start(server, cb);
 }
 
 void ogs_sbi_server_stop_all(void)
@@ -94,13 +103,13 @@ void ogs_sbi_server_stop_all(void)
     ogs_sbi_server_t *server = NULL, *next_server = NULL;
 
     ogs_list_for_each_safe(&ogs_sbi_self()->server_list, next_server, server)
-        ogs_mhd_server_stop(server);
+        ogs_sbi_server_actions.stop(server);
 }
 
 void ogs_sbi_server_send_response(
         ogs_sbi_session_t *session, ogs_sbi_response_t *response)
 {
-    ogs_mhd_server_send_response(session, response);
+    ogs_sbi_server_actions.send_response(session, response);
 }
 
 void ogs_sbi_server_send_problem(
@@ -158,5 +167,5 @@ void ogs_sbi_server_send_error(ogs_sbi_session_t *session,
 
 ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_session_t *session)
 {
-    return ogs_mhd_server_from_session(session);
+    return ogs_sbi_server_actions.from_session(session);
 }

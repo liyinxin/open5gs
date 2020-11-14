@@ -51,6 +51,21 @@ typedef struct ogs_sbi_server_s {
 
 } ogs_sbi_server_t;
 
+typedef struct ogs_sbi_server_actions_s {
+    void (*init)(int num_of_connection_pool);
+    void (*cleanup)(void);
+
+    void (*start)(ogs_sbi_server_t *server, int (*cb)(
+                ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+                ogs_sbi_request_t *request));
+    void (*stop)(ogs_sbi_server_t *server);
+
+    void (*send_response)(
+            ogs_sbi_session_t *session, ogs_sbi_response_t *response);
+
+    ogs_sbi_server_t *(*from_session)(void *session);
+} ogs_sbi_server_actions_t;
+
 void ogs_sbi_server_init(int num_of_connection_pool);
 void ogs_sbi_server_final(void);
 

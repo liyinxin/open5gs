@@ -28,6 +28,52 @@ typedef enum MHD_Result _MHD_Result;
 typedef int _MHD_Result;
 #endif
 
+static void server_init(int num_of_session_pool);
+static void server_final(void);
+
+static void server_start(ogs_sbi_server_t *server, int (*cb)(
+            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_request_t *request));
+static void server_stop(ogs_sbi_server_t *server);
+
+static void server_send_response(
+        ogs_sbi_session_t *session, ogs_sbi_response_t *response);
+
+static ogs_sbi_server_t *server_from_session(void *session);
+
+const ogs_sbi_server_actions_t ogs_mhd_server_actions = {
+    server_init,
+    server_final,
+
+    server_start,
+    server_stop,
+
+    server_send_response,
+    server_from_session,
+};
+
+static void run(short when, ogs_socket_t fd, void *data);
+static void notify_connection(void *cls,
+        struct MHD_Connection *connection,
+        void **socket_context,
+        enum MHD_ConnectionNotificationCode toe);
+static _MHD_Result access_handler(
+        void *cls,
+        struct MHD_Connection *connection,
+        const char *url,
+        const char *method,
+        const char *version,
+        const char *upload_data,
+        size_t *upload_data_size,
+        void **con_cls);
+static void notify_completed(
+        void *cls,
+        struct MHD_Connection *connection,
+        void **con_cls,
+        enum MHD_RequestTerminationCode toe);
+
+static void session_timer_expired(void *data);
+
 typedef struct ogs_mhd_session_s {
     ogs_lnode_t             lnode;
 
@@ -56,33 +102,12 @@ typedef struct ogs_mhd_session_s {
 
 static OGS_POOL(session_pool, ogs_mhd_session_t);
 
-static void run(short when, ogs_socket_t fd, void *data);
-static void notify_connection(void *cls,
-        struct MHD_Connection *connection,
-        void **socket_context,
-        enum MHD_ConnectionNotificationCode toe);
-static _MHD_Result access_handler(
-        void *cls,
-        struct MHD_Connection *connection,
-        const char *url,
-        const char *method,
-        const char *version,
-        const char *upload_data,
-        size_t *upload_data_size,
-        void **con_cls);
-static void notify_completed(
-        void *cls,
-        struct MHD_Connection *connection,
-        void **con_cls,
-        enum MHD_RequestTerminationCode toe);
-
-static void session_timer_expired(void *data);
-
-void ogs_mhd_server_init(int num_of_session_pool)
+static void server_init(int num_of_session_pool)
 {
     ogs_pool_init(&session_pool, num_of_session_pool);
 }
-void ogs_mhd_server_final(void)
+
+static void server_final(void)
 {
     ogs_pool_final(&session_pool);
 }
@@ -167,7 +192,7 @@ static void session_remove_all(ogs_sbi_server_t *server)
         session_remove(mhd_sess);
 }
 
-void ogs_mhd_server_start(ogs_sbi_server_t *server, int (*cb)(
+static void server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_server_t *server, ogs_sbi_session_t *session,
             ogs_sbi_request_t *request))
 {
@@ -253,7 +278,7 @@ void ogs_mhd_server_start(ogs_sbi_server_t *server, int (*cb)(
         ogs_info("sbi_server() [any]:any");
 }
 
-void ogs_mhd_server_stop(ogs_sbi_server_t *server)
+static void server_stop(ogs_sbi_server_t *server)
 {
     ogs_assert(server);
 
@@ -270,7 +295,7 @@ void ogs_mhd_server_stop(ogs_sbi_server_t *server)
     }
 }
 
-void ogs_mhd_server_send_response(
+static void server_send_response(
         ogs_sbi_session_t *session, ogs_sbi_response_t *response)
 {
     int ret;
@@ -526,7 +551,7 @@ static void notify_completed(
     ogs_sbi_request_free(request);
 }
 
-ogs_sbi_server_t *ogs_mhd_server_from_session(void *session)
+static ogs_sbi_server_t *server_from_session(void *session)
 {
     ogs_mhd_session_t *mhd_sess = NULL;
 
