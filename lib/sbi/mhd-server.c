@@ -20,8 +20,6 @@
 #include "ogs-app.h"
 #include "ogs-sbi.h"
 
-#include "sbi-private.h"
-
 #include "microhttpd.h"
 
 #if MHD_VERSION >= 0x00097001

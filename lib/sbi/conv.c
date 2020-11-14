@@ -20,8 +20,6 @@
 #include "ogs-sbi.h"
 #include "yuarel.h"
 
-#include "sbi-private.h"
-
 static char *ogs_uridup(bool https, ogs_sockaddr_t *addr, ogs_sbi_header_t *h)
 {
     char buf[OGS_ADDRSTRLEN];
