@@ -21,6 +21,7 @@
 #include "ogs-sbi.h"
 
 extern const ogs_sbi_server_actions_t ogs_mhd_server_actions;
+extern const ogs_sbi_server_actions_t ogs_nghttp2_server_actions;
 
 ogs_sbi_server_actions_t ogs_sbi_server_actions;
 bool ogs_sbi_server_actions_initialized = false;
@@ -31,6 +32,7 @@ void ogs_sbi_server_init(int num_of_session_pool)
 {
     if (ogs_sbi_server_actions_initialized == false) {
         ogs_sbi_server_actions = ogs_mhd_server_actions;
+        ogs_sbi_server_actions = ogs_nghttp2_server_actions;
     }
 
     ogs_sbi_server_actions.init(num_of_session_pool);

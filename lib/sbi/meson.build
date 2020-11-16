@@ -26,6 +26,7 @@ libsbi_sources = files('''
     message.c
 
     mhd-server.c
+    nghttp2-server.c
     server.c
 
     client.c
