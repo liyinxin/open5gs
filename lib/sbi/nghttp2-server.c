@@ -28,8 +28,6 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_request_t *request));
 static void server_stop(ogs_sbi_server_t *server);
 
-static void accept_handler(short when, ogs_socket_t fd, void *data);
-
 static void server_send_response(
         ogs_sbi_session_t *session, ogs_sbi_response_t *response);
 
@@ -46,17 +44,18 @@ const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
     server_from_session,
 };
 
+static void accept_handler(short when, ogs_socket_t fd, void *data);
+
+static void session_timer_expired(void *data);
+
 typedef struct ogs_nghttp2_session_s {
     ogs_lnode_t             lnode;
 
-#if 0
-    struct MHD_Connection   *connection;
-#endif
+    ogs_sock_t              *sock;
 
     ogs_sbi_request_t       *request;
     ogs_sbi_server_t        *server;
 
-#if 0
     /*
      * The HTTP server(MHD) should send an HTTP response
      * if an HTTP client(CURL) is requested.
@@ -71,7 +70,6 @@ typedef struct ogs_nghttp2_session_s {
      * terminates the program.
      */
     ogs_timer_t             *timer;
-#endif
 
     void *data;
 } ogs_nghttp2_session_t;
@@ -86,6 +84,86 @@ static void server_init(int num_of_session_pool)
 static void server_final(void)
 {
     ogs_pool_final(&session_pool);
+}
+
+static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
+        ogs_sbi_request_t *request, ogs_sock_t *sock)
+{
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+
+    ogs_assert(server);
+    ogs_assert(request);
+    ogs_assert(sock);
+
+    ogs_pool_alloc(&session_pool, &nghttp2_sess);
+    ogs_assert(nghttp2_sess);
+    memset(nghttp2_sess, 0, sizeof(ogs_nghttp2_session_t));
+
+    nghttp2_sess->server = server;
+    nghttp2_sess->request = request;
+    nghttp2_sess->sock = sock;
+
+    nghttp2_sess->timer = ogs_timer_add(
+            ogs_app()->timer_mgr, session_timer_expired, nghttp2_sess);
+    ogs_assert(nghttp2_sess->timer);
+
+    /* If User does not send http response within deadline,
+     * Open5GS will assert this program. */
+    ogs_timer_start(nghttp2_sess->timer,
+            ogs_app()->time.message.sbi.connection_deadline);
+
+    ogs_list_add(&server->suspended_session_list, nghttp2_sess);
+
+    return nghttp2_sess;
+}
+
+static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
+{
+    ogs_sock_t *sock = NULL;
+    ogs_sbi_server_t *server = NULL;
+
+    ogs_assert(nghttp2_sess);
+    server = nghttp2_sess->server;
+    ogs_assert(server);
+
+    ogs_list_remove(&server->suspended_session_list, nghttp2_sess);
+
+    ogs_assert(nghttp2_sess->timer);
+    ogs_timer_delete(nghttp2_sess->timer);
+
+    sock = nghttp2_sess->sock;
+    ogs_assert(sock);
+
+    ogs_sock_destroy(sock);
+
+    ogs_pool_free(&session_pool, nghttp2_sess);
+}
+
+static void session_timer_expired(void *data)
+{
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+
+    nghttp2_sess = data;
+    ogs_assert(nghttp2_sess);
+
+    ogs_fatal("An HTTP request was received, "
+                "but the HTTP response is missing.");
+    ogs_fatal("Please send the related pcap files for this case.");
+
+    session_remove(nghttp2_sess);
+
+    ogs_assert_if_reached();
+}
+
+static void session_remove_all(ogs_sbi_server_t *server)
+{
+    ogs_nghttp2_session_t *nghttp2_sess = NULL, *next_nghttp2_sess = NULL;
+
+    ogs_assert(server);
+
+    ogs_list_for_each_safe(
+            &server->suspended_session_list, next_nghttp2_sess, nghttp2_sess)
+        session_remove(nghttp2_sess);
 }
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
@@ -111,7 +189,7 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
 
     /* Setup poll for server listening socket */
     server->node.poll = ogs_pollset_add(ogs_app()->pollset,
-            OGS_POLLIN, sock->fd, accept_handler, &server->node);
+            OGS_POLLIN, sock->fd, accept_handler, server);
     ogs_assert(server->node.poll);
 
     hostname = ogs_gethostname(addr);
@@ -124,21 +202,50 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
 
 static void server_stop(ogs_sbi_server_t *server)
 {
+    ogs_assert(server);
+
     if (server->node.poll)
         ogs_pollset_remove(server->node.poll);
 
     if (server->node.sock)
         ogs_sock_destroy(server->node.sock);
+
+    session_remove_all(server);
 }
 
 static void accept_handler(short when, ogs_socket_t fd, void *data)
 {
-    ogs_socknode_t *node = data;
+#if 0
+    char buf[OGS_ADDRSTRLEN];
+#endif
+
+    ogs_sbi_server_t *server = data;
+#if 0
+    ogs_sbi_request_t *request = NULL;
+#else
+    ogs_sbi_request_t *request = (ogs_sbi_request_t *)1;
+#endif
+    ogs_sbi_session_t *session = NULL;
+
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+    ogs_sock_t *sock = NULL;
+    ogs_sock_t *new = NULL;
 
     ogs_assert(data);
-    ogs_assert(when == OGS_POLLIN);
+    ogs_assert(fd != INVALID_SOCKET);
 
-    ogs_fatal("Accept");
+    sock = server->node.sock;
+
+    new = ogs_sock_accept(sock);
+    if (!new) {
+        ogs_error("ogs_sock_accept() failed");
+        return;
+    }
+
+    nghttp2_sess = session_add(server, request, new);
+    ogs_assert(nghttp2_sess);
+    session = (ogs_sbi_session_t *)nghttp2_sess;
+    ogs_assert(session);
 }
 
 static void server_send_response(
