@@ -88,7 +88,7 @@ char *ogs_sbi_client_uri(ogs_sbi_client_t *client, ogs_sbi_header_t *h)
     if (client->tls.key && client->tls.pem)
         https = true;
 
-    return ogs_uridup(https, client->addr, h);
+    return ogs_uridup(https, client->node.addr, h);
 }
 
 /**

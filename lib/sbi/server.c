@@ -60,7 +60,6 @@ ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr)
     ogs_assert(server);
     memset(server, 0, sizeof(ogs_sbi_server_t));
 
-    ogs_list_init(&server->suspended_session_list);
     ogs_copyaddrinfo(&server->node.addr, addr);
 
     ogs_list_add(&ogs_sbi_self()->server_list, server);
@@ -73,6 +72,10 @@ void ogs_sbi_server_remove(ogs_sbi_server_t *server)
     ogs_assert(server);
 
     ogs_list_remove(&ogs_sbi_self()->server_list, server);
+
+    ogs_assert(server->node.addr);
+    ogs_freeaddrinfo(server->node.addr);
+
     ogs_pool_free(&server_pool, server);
 }
 

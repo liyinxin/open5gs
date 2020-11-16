@@ -285,9 +285,6 @@ static void server_stop(ogs_sbi_server_t *server)
     if (server->node.poll)
         ogs_pollset_remove(server->node.poll);
 
-    ogs_assert(server->node.addr);
-    ogs_freeaddrinfo(server->node.addr);
-
     session_remove_all(server);
 
     if (server->mhd) {

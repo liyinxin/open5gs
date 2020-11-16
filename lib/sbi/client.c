@@ -100,7 +100,7 @@ ogs_sbi_client_t *ogs_sbi_client_add(ogs_sockaddr_t *addr)
 
     ogs_trace("ogs_sbi_client_add()");
 
-    ogs_copyaddrinfo(&client->addr, addr);
+    ogs_copyaddrinfo(&client->node.addr, addr);
 
     ogs_list_init(&client->connection_list);
 
@@ -143,8 +143,8 @@ void ogs_sbi_client_remove(ogs_sbi_client_t *client)
     ogs_assert(client->multi);
     curl_multi_cleanup(client->multi);
 
-    ogs_assert(client->addr);
-    ogs_freeaddrinfo(client->addr);
+    ogs_assert(client->node.addr);
+    ogs_freeaddrinfo(client->node.addr);
 
     ogs_pool_free(&client_pool, client);
 }
@@ -156,8 +156,8 @@ ogs_sbi_client_t *ogs_sbi_client_find(ogs_sockaddr_t *addr)
     ogs_assert(addr);
 
     ogs_list_for_each(&ogs_sbi_self()->client_list, client) {
-        if (ogs_sockaddr_is_equal(client->addr, addr) == true &&
-            OGS_PORT(client->addr) == OGS_PORT(addr))
+        if (ogs_sockaddr_is_equal(client->node.addr, addr) == true &&
+            OGS_PORT(client->node.addr) == OGS_PORT(addr))
             break;
     }
 
