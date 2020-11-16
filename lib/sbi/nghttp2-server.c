@@ -28,6 +28,8 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_request_t *request));
 static void server_stop(ogs_sbi_server_t *server);
 
+static void accept_handler(short when, ogs_socket_t fd, void *data);
+
 static void server_send_response(
         ogs_sbi_session_t *session, ogs_sbi_response_t *response);
 
@@ -107,6 +109,11 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
     /* Setup callback function */
     server->cb = cb;
 
+    /* Setup poll for server listening socket */
+    server->node.poll = ogs_pollset_add(ogs_app()->pollset,
+            OGS_POLLIN, sock->fd, accept_handler, &server->node);
+    ogs_assert(server->node.poll);
+
     hostname = ogs_gethostname(addr);
     if (hostname)
         ogs_info("nghttp2_server() [%s]:%d", hostname, OGS_PORT(addr));
@@ -122,6 +129,16 @@ static void server_stop(ogs_sbi_server_t *server)
 
     if (server->node.sock)
         ogs_sock_destroy(server->node.sock);
+}
+
+static void accept_handler(short when, ogs_socket_t fd, void *data)
+{
+    ogs_socknode_t *node = data;
+
+    ogs_assert(data);
+    ogs_assert(when == OGS_POLLIN);
+
+    ogs_fatal("Accept");
 }
 
 static void server_send_response(
