@@ -45,6 +45,7 @@ const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
 };
 
 static void accept_handler(short when, ogs_socket_t fd, void *data);
+static void recv_handler(short when, ogs_socket_t fd, void *data);
 
 static void session_timer_expired(void *data);
 
@@ -52,6 +53,11 @@ typedef struct ogs_nghttp2_session_s {
     ogs_lnode_t             lnode;
 
     ogs_sock_t              *sock;
+    ogs_sockaddr_t          *addr;
+    struct {
+        ogs_poll_t          *read;
+        ogs_poll_t          *write;
+    } poll;
 
     ogs_sbi_request_t       *request;
     ogs_sbi_server_t        *server;
@@ -103,6 +109,14 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
     nghttp2_sess->request = request;
     nghttp2_sess->sock = sock;
 
+    nghttp2_sess->addr = ogs_calloc(1, sizeof(ogs_sockaddr_t));
+    ogs_assert(nghttp2_sess->addr);
+    memcpy(nghttp2_sess->addr, &sock->remote_addr, sizeof(ogs_sockaddr_t));
+
+    nghttp2_sess->poll.read = ogs_pollset_add(ogs_app()->pollset,
+        OGS_POLLIN, sock->fd, recv_handler, sock);
+    ogs_assert(nghttp2_sess->poll.read);
+
     nghttp2_sess->timer = ogs_timer_add(
             ogs_app()->timer_mgr, session_timer_expired, nghttp2_sess);
     ogs_assert(nghttp2_sess->timer);
@@ -119,8 +133,8 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
 
 static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
 {
-    ogs_sock_t *sock = NULL;
     ogs_sbi_server_t *server = NULL;
+    ogs_poll_t *poll = NULL;
 
     ogs_assert(nghttp2_sess);
     server = nghttp2_sess->server;
@@ -131,10 +145,19 @@ static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
     ogs_assert(nghttp2_sess->timer);
     ogs_timer_delete(nghttp2_sess->timer);
 
-    sock = nghttp2_sess->sock;
-    ogs_assert(sock);
+    poll = ogs_pollset_cycle(ogs_app()->pollset, nghttp2_sess->poll.read);
+    ogs_assert(poll);
+    ogs_pollset_remove(poll);
 
-    ogs_sock_destroy(sock);
+    poll = ogs_pollset_cycle(ogs_app()->pollset, nghttp2_sess->poll.write);
+    if (poll)
+        ogs_pollset_remove(poll);
+
+    ogs_assert(nghttp2_sess->addr);
+    ogs_free(nghttp2_sess->addr);
+
+    ogs_assert(nghttp2_sess->sock);
+    ogs_sock_destroy(nghttp2_sess->sock);
 
     ogs_pool_free(&session_pool, nghttp2_sess);
 }
@@ -246,6 +269,13 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
     ogs_assert(nghttp2_sess);
     session = (ogs_sbi_session_t *)nghttp2_sess;
     ogs_assert(session);
+}
+
+static void recv_handler(short when, ogs_socket_t fd, void *data)
+{
+    ogs_sock_t *sock = data;
+
+    ogs_assert(sock);
 }
 
 static void server_send_response(
