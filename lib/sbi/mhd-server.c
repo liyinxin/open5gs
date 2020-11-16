@@ -232,7 +232,7 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
     mhd_ops[index].ptr_value = NULL;
     index++;
 
-    addr = server->addr;
+    addr = server->node.addr;
     ogs_assert(addr);
     if (addr->ogs_sa_family == AF_INET6)
         mhd_flags |= MHD_USE_IPv6;
@@ -262,9 +262,9 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
     mhd_info = MHD_get_daemon_info(server->mhd, MHD_DAEMON_INFO_LISTEN_FD);
     ogs_assert(mhd_info);
 
-    server->poll = ogs_pollset_add(ogs_app()->pollset,
+    server->node.poll = ogs_pollset_add(ogs_app()->pollset,
             OGS_POLLIN, mhd_info->listen_fd, run, server->mhd);
-    ogs_assert(server->poll);
+    ogs_assert(server->node.poll);
 
     if (addr) {
         char *hostname = ogs_gethostname(addr);
@@ -282,13 +282,11 @@ static void server_stop(ogs_sbi_server_t *server)
 {
     ogs_assert(server);
 
-    if (server->poll) {
-        ogs_pollset_remove(server->poll);
-        server->poll = NULL;
-    }
+    if (server->node.poll)
+        ogs_pollset_remove(server->node.poll);
 
-    ogs_assert(server->addr);
-    ogs_freeaddrinfo(server->addr);
+    ogs_assert(server->node.addr);
+    ogs_freeaddrinfo(server->node.addr);
 
     session_remove_all(server);
 

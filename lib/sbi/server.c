@@ -61,7 +61,7 @@ ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr)
     memset(server, 0, sizeof(ogs_sbi_server_t));
 
     ogs_list_init(&server->suspended_session_list);
-    ogs_copyaddrinfo(&server->addr, addr);
+    ogs_copyaddrinfo(&server->node.addr, addr);
 
     ogs_list_add(&ogs_sbi_self()->server_list, server);
 

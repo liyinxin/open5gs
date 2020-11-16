@@ -33,8 +33,6 @@ typedef struct ogs_sbi_session_s ogs_sbi_session_t;
 typedef struct ogs_sbi_server_s {
     ogs_socknode_t  node;
 
-    ogs_sockaddr_t  *addr;                  /* Listen socket address */
-
     struct {
         const char  *key;
         const char  *pem;
@@ -47,7 +45,6 @@ typedef struct ogs_sbi_server_s {
     ogs_list_t      suspended_session_list; /* MHD suspended list */
 
     void            *mhd;                   /* MHD instance */
-    ogs_poll_t      *poll;                  /* MHD server poll */
 
 } ogs_sbi_server_t;
 
