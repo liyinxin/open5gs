@@ -90,19 +90,38 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_server_t *server, ogs_sbi_session_t *session,
             ogs_sbi_request_t *request))
 {
-#if 0
-    char buf[128];
-    ogs_assert(server);
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sock_t *sock = NULL;
+    ogs_sockaddr_t *addr = NULL;
+    char *hostname = NULL;
+
+    addr = server->node.addr;
+    ogs_assert(addr);
+
+    sock = ogs_tcp_server(&server->node);
+    if (!sock) {
+        ogs_error("Cannot start SBI server");
+        return;
+    }
 
     /* Setup callback function */
     server->cb = cb;
 
-    ogs_fatal("addr = %s", OGS_ADDR(server->addr, buf));
-#endif
+    hostname = ogs_gethostname(addr);
+    if (hostname)
+        ogs_info("nghttp2_server() [%s]:%d", hostname, OGS_PORT(addr));
+    else
+        ogs_info("nghttp2_server() [%s]:%d",
+                OGS_ADDR(addr, buf), OGS_PORT(addr));
 }
 
 static void server_stop(ogs_sbi_server_t *server)
 {
+    if (server->node.poll)
+        ogs_pollset_remove(server->node.poll);
+
+    if (server->node.sock)
+        ogs_sock_destroy(server->node.sock);
 }
 
 static void server_send_response(

@@ -198,6 +198,7 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
 {
     char buf[OGS_ADDRSTRLEN];
     ogs_sockaddr_t *addr = NULL;
+    char *hostname = NULL;
 
 #if MHD_VERSION >= 0x00095300
     unsigned int mhd_flags = MHD_USE_ERROR_LOG;
@@ -266,16 +267,11 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
             OGS_POLLIN, mhd_info->listen_fd, run, server->mhd);
     ogs_assert(server->node.poll);
 
-    if (addr) {
-        char *hostname = ogs_gethostname(addr);
-        if (hostname)
-            ogs_info("sbi_server() [%s]:%d",
-                    hostname, OGS_PORT(addr));
-        else
-            ogs_info("sbi_server() [%s]:%d",
-                    OGS_ADDR(addr, buf), OGS_PORT(addr));
-    } else
-        ogs_info("sbi_server() [any]:any");
+    hostname = ogs_gethostname(addr);
+    if (hostname)
+        ogs_info("mhd_server() [%s]:%d", hostname, OGS_PORT(addr));
+    else
+        ogs_info("mhd_server() [%s]:%d", OGS_ADDR(addr, buf), OGS_PORT(addr));
 }
 
 static void server_stop(ogs_sbi_server_t *server)
