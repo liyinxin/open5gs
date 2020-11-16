@@ -287,6 +287,9 @@ static void server_stop(ogs_sbi_server_t *server)
         server->poll = NULL;
     }
 
+    ogs_assert(server->addr);
+    ogs_freeaddrinfo(server->addr);
+
     session_remove_all(server);
 
     if (server->mhd) {

@@ -73,12 +73,6 @@ void ogs_sbi_server_remove(ogs_sbi_server_t *server)
     ogs_assert(server);
 
     ogs_list_remove(&ogs_sbi_self()->server_list, server);
-
-    ogs_sbi_server_actions.stop(server);
-
-    ogs_assert(server->addr);
-    ogs_freeaddrinfo(server->addr);
-
     ogs_pool_free(&server_pool, server);
 }
 
