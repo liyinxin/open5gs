@@ -31,7 +31,7 @@ extern "C" {
 typedef struct ogs_sbi_session_s ogs_sbi_session_t;
 
 typedef struct ogs_sbi_server_s {
-    ogs_lnode_t     lnode;                  /* A node of list_t */
+    ogs_socknode_t  node;
 
     ogs_sockaddr_t  *addr;                  /* Listen socket address */
 

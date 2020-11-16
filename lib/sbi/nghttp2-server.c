@@ -90,6 +90,15 @@ static void server_start(ogs_sbi_server_t *server, int (*cb)(
             ogs_sbi_server_t *server, ogs_sbi_session_t *session,
             ogs_sbi_request_t *request))
 {
+#if 0
+    char buf[128];
+    ogs_assert(server);
+
+    /* Setup callback function */
+    server->cb = cb;
+
+    ogs_fatal("addr = %s", OGS_ADDR(server->addr, buf));
+#endif
 }
 
 static void server_stop(ogs_sbi_server_t *server)
