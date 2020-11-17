@@ -20,6 +20,8 @@
 #include "ogs-app.h"
 #include "ogs-sbi.h"
 
+#include <nghttp2/nghttp2.h>
+
 static void server_init(int num_of_session_pool);
 static void server_final(void);
 
@@ -49,7 +51,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data);
 
 static void session_timer_expired(void *data);
 
-typedef struct nghttp2_session_s {
+typedef struct ogs_nghttp2_session_s {
     ogs_lnode_t             lnode;
 
     ogs_sock_t              *sock;
@@ -65,9 +67,13 @@ typedef struct nghttp2_session_s {
     ogs_timer_t             *timer;
 
     void *data;
-} nghttp2_session_t;
 
-static OGS_POOL(session_pool, nghttp2_session_t);
+    nghttp2_session         *session;
+} ogs_nghttp2_session_t;
+
+static void initialize_nghttp2_session(ogs_nghttp2_session_t *nghttp2_sess);
+
+static OGS_POOL(session_pool, ogs_nghttp2_session_t);
 
 static void server_init(int num_of_session_pool)
 {
@@ -79,17 +85,17 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static nghttp2_session_t *session_add(
+static ogs_nghttp2_session_t *session_add(
         ogs_sbi_server_t *server, ogs_sock_t *sock)
 {
-    nghttp2_session_t *nghttp2_sess = NULL;
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(sock);
 
     ogs_pool_alloc(&session_pool, &nghttp2_sess);
     ogs_assert(nghttp2_sess);
-    memset(nghttp2_sess, 0, sizeof(nghttp2_session_t));
+    memset(nghttp2_sess, 0, sizeof(ogs_nghttp2_session_t));
 
     nghttp2_sess->server = server;
     nghttp2_sess->sock = sock;
@@ -114,7 +120,7 @@ static nghttp2_session_t *session_add(
     return nghttp2_sess;
 }
 
-static void session_remove(nghttp2_session_t *nghttp2_sess)
+static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
 {
     ogs_sbi_server_t *server = NULL;
     ogs_poll_t *poll = NULL;
@@ -150,7 +156,7 @@ static void session_remove(nghttp2_session_t *nghttp2_sess)
 
 static void session_timer_expired(void *data)
 {
-    nghttp2_session_t *nghttp2_sess = NULL;
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
 
     nghttp2_sess = data;
     ogs_assert(nghttp2_sess);
@@ -162,7 +168,7 @@ static void session_timer_expired(void *data)
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    nghttp2_session_t *nghttp2_sess = NULL, *next_nghttp2_sess = NULL;
+    ogs_nghttp2_session_t *nghttp2_sess = NULL, *next_nghttp2_sess = NULL;
 
     ogs_assert(server);
 
@@ -225,9 +231,11 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 #endif
 
     ogs_sbi_server_t *server = data;
+#if 0
     ogs_sbi_session_t *sbi_sess = NULL;
+#endif
 
-    nghttp2_session_t *nghttp2_sess = NULL;
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
     ogs_sock_t *sock = NULL;
     ogs_sock_t *new = NULL;
 
@@ -244,13 +252,21 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
     nghttp2_sess = session_add(server, new);
     ogs_assert(nghttp2_sess);
-    sbi_sess = (ogs_sbi_session_t *)nghttp2_sess;
-    ogs_assert(sbi_sess);
+
+    initialize_nghttp2_session(nghttp2_sess);
+
+#if 0
+    if (send_server_connection_header(session_data) != 0 ||
+        session_send(session_data) != 0) {
+        session_remove(nghttp2_sess);
+        return;
+    }
+#endif
 }
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
 {
-    nghttp2_session_t *nghttp2_sess = data;
+    ogs_nghttp2_session_t *nghttp2_sess = data;
     ogs_pkbuf_t *pkbuf = NULL;
     int n;
 
@@ -284,11 +300,168 @@ static void server_send_response(
 
 static ogs_sbi_server_t *server_from_session(void *session)
 {
-    nghttp2_session_t *nghttp2_sess = NULL;
+    ogs_nghttp2_session_t *nghttp2_sess = NULL;
 
     nghttp2_sess = session;
     ogs_assert(nghttp2_sess);
     ogs_assert(nghttp2_sess->server);
 
     return nghttp2_sess->server;
+}
+
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data);
+static int on_frame_recv_callback(nghttp2_session *session,
+                                  const nghttp2_frame *frame, void *user_data);
+static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
+                                    uint32_t error_code, void *user_data);
+static int on_header_callback(nghttp2_session *session,
+                              const nghttp2_frame *frame, const uint8_t *name,
+                              size_t namelen, const uint8_t *value,
+                              size_t valuelen, uint8_t flags, void *user_data);
+static int on_begin_headers_callback(nghttp2_session *session,
+                                     const nghttp2_frame *frame,
+                                     void *user_data);
+
+static void initialize_nghttp2_session(ogs_nghttp2_session_t *nghttp2_sess)
+{
+    nghttp2_session_callbacks *callbacks = NULL;
+
+    ogs_assert(nghttp2_sess);
+
+    nghttp2_session_callbacks_new(&callbacks);
+
+    nghttp2_session_callbacks_set_send_callback(
+            callbacks, send_callback);
+    nghttp2_session_callbacks_set_on_frame_recv_callback(
+            callbacks, on_frame_recv_callback);
+    nghttp2_session_callbacks_set_on_stream_close_callback(
+            callbacks, on_stream_close_callback);
+    nghttp2_session_callbacks_set_on_header_callback(
+            callbacks, on_header_callback);
+    nghttp2_session_callbacks_set_on_begin_headers_callback(
+            callbacks, on_begin_headers_callback);
+
+    nghttp2_session_server_new(&nghttp2_sess->session, callbacks, nghttp2_sess);
+
+    nghttp2_session_callbacks_del(callbacks);
+}
+
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data)
+{
+#if 0
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  struct bufferevent *bev = session_data->bev;
+  (void)session;
+  (void)flags;
+
+  /* Avoid excessive buffering in server side. */
+  if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
+      OUTPUT_WOULDBLOCK_THRESHOLD) {
+    return NGHTTP2_ERR_WOULDBLOCK;
+  }
+  bufferevent_write(bev, data, length);
+  return (ssize_t)length;
+#else
+  return 0;
+#endif
+}
+
+static int on_frame_recv_callback(nghttp2_session *session,
+                                  const nghttp2_frame *frame, void *user_data) {
+#if 0
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  http2_stream_data *stream_data;
+  switch (frame->hd.type) {
+  case NGHTTP2_DATA:
+  case NGHTTP2_HEADERS:
+    /* Check that the client request has finished */
+    if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+      stream_data =
+          nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+      /* For DATA and HEADERS frame, this callback may be called after
+         on_stream_close_callback. Check that stream still alive. */
+      if (!stream_data) {
+        return 0;
+      }
+      return on_request_recv(session, session_data, stream_data);
+    }
+    break;
+  default:
+    break;
+  }
+#endif
+  return 0;
+}
+
+static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
+                                    uint32_t error_code, void *user_data) {
+#if 0
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  http2_stream_data *stream_data;
+  (void)error_code;
+
+  stream_data = nghttp2_session_get_stream_user_data(session, stream_id);
+  if (!stream_data) {
+    return 0;
+  }
+  remove_stream(session_data, stream_data);
+  delete_http2_stream_data(stream_data);
+#endif
+  return 0;
+}
+
+/* nghttp2_on_header_callback: Called when nghttp2 library emits
+   single header name/value pair. */
+static int on_header_callback(nghttp2_session *session,
+                              const nghttp2_frame *frame, const uint8_t *name,
+                              size_t namelen, const uint8_t *value,
+                              size_t valuelen, uint8_t flags, void *user_data)
+{
+#if 0
+  http2_stream_data *stream_data;
+  const char PATH[] = ":path";
+  (void)flags;
+  (void)user_data;
+
+  switch (frame->hd.type) {
+  case NGHTTP2_HEADERS:
+    if (frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+      break;
+    }
+    stream_data =
+        nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    if (!stream_data || stream_data->request_path) {
+      break;
+    }
+    if (namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
+      size_t j;
+      for (j = 0; j < valuelen && value[j] != '?'; ++j)
+        ;
+      stream_data->request_path = percent_decode(value, j);
+    }
+    break;
+  }
+#endif
+  return 0;
+}
+
+static int on_begin_headers_callback(nghttp2_session *session,
+                                     const nghttp2_frame *frame,
+                                     void *user_data)
+{
+#if 0
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  http2_stream_data *stream_data;
+
+  if (frame->hd.type != NGHTTP2_HEADERS ||
+      frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+    return 0;
+  }
+  stream_data = create_http2_stream_data(session_data, frame->hd.stream_id);
+  nghttp2_session_set_stream_user_data(session, frame->hd.stream_id,
+                                       stream_data);
+#endif
+  return 0;
 }

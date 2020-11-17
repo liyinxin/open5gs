@@ -74,7 +74,7 @@ static void notify_completed(
 
 static void session_timer_expired(void *data);
 
-typedef struct mhd_session_s {
+typedef struct ogs_mhd_session_s {
     ogs_lnode_t             lnode;
 
     struct MHD_Connection   *connection;
@@ -100,9 +100,9 @@ typedef struct mhd_session_s {
     ogs_timer_t             *timer;
 
     void *data;
-} mhd_session_t;
+} ogs_mhd_session_t;
 
-static OGS_POOL(session_pool, mhd_session_t);
+static OGS_POOL(session_pool, ogs_mhd_session_t);
 
 static void server_init(int num_of_session_pool)
 {
@@ -114,10 +114,10 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static mhd_session_t *session_add(ogs_sbi_server_t *server,
+static ogs_mhd_session_t *session_add(ogs_sbi_server_t *server,
         ogs_sbi_request_t *request, struct MHD_Connection *connection)
 {
-    mhd_session_t *mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(request);
@@ -125,7 +125,7 @@ static mhd_session_t *session_add(ogs_sbi_server_t *server,
 
     ogs_pool_alloc(&session_pool, &mhd_sess);
     ogs_assert(mhd_sess);
-    memset(mhd_sess, 0, sizeof(mhd_session_t));
+    memset(mhd_sess, 0, sizeof(ogs_mhd_session_t));
 
     mhd_sess->server = server;
     mhd_sess->request = request;
@@ -145,7 +145,7 @@ static mhd_session_t *session_add(ogs_sbi_server_t *server,
     return mhd_sess;
 }
 
-static void session_remove(mhd_session_t *mhd_sess)
+static void session_remove(ogs_mhd_session_t *mhd_sess)
 {
     struct MHD_Connection *connection;
     ogs_sbi_server_t *server = NULL;
@@ -169,7 +169,7 @@ static void session_remove(mhd_session_t *mhd_sess)
 
 static void session_timer_expired(void *data)
 {
-    mhd_session_t *mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     mhd_sess = data;
     ogs_assert(mhd_sess);
@@ -185,7 +185,7 @@ static void session_timer_expired(void *data)
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    mhd_session_t *mhd_sess = NULL, *next_mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL, *next_mhd_sess = NULL;
 
     ogs_assert(server);
 
@@ -302,14 +302,14 @@ static void server_send_response(
     struct MHD_Daemon *mhd_daemon = NULL;
     const union MHD_ConnectionInfo *mhd_info = NULL;
     MHD_socket mhd_socket = INVALID_SOCKET;
-    mhd_session_t *mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     ogs_hash_index_t *hi;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(response);
 
-    mhd_sess = (mhd_session_t *)sbi_sess;
+    mhd_sess = (ogs_mhd_session_t *)sbi_sess;
     ogs_assert(mhd_sess);
     connection = mhd_sess->connection;
     ogs_assert(connection);
@@ -437,7 +437,7 @@ static _MHD_Result access_handler(
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_session_t *sbi_sess = NULL;
-    mhd_session_t *mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     server = cls;
     ogs_assert(server);
@@ -552,7 +552,7 @@ static void notify_completed(
 
 static ogs_sbi_server_t *server_from_session(void *session)
 {
-    mhd_session_t *mhd_sess = NULL;
+    ogs_mhd_session_t *mhd_sess = NULL;
 
     mhd_sess = session;
     ogs_assert(mhd_sess);
