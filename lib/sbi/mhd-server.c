@@ -402,8 +402,9 @@ static void notify_connection(void *cls,
             *socket_context = poll.read;
             break;
         case MHD_CONNECTION_NOTIFY_CLOSED:
-            poll.read = *socket_context;
-            ogs_pollset_remove(poll.read);
+            poll.read = ogs_pollset_cycle(ogs_app()->pollset, *socket_context);
+            if (poll.read)
+                ogs_pollset_remove(poll.read);
             break;
     }
 }
