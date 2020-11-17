@@ -83,17 +83,19 @@ typedef struct ogs_mhd_session_s {
     ogs_sbi_server_t        *server;
 
     /*
-     * The HTTP server(MHD) should send an HTTP response
-     * if an HTTP client(CURL) is requested.
-     *
      * If the HTTP client closes the socket without sending an HTTP response,
-     * the CPU load of a program using MHD is 100%. This is because
-     * POLLIN(POLLRDHUP) is generated. So, the callback function of poll
-     * continues to be called.
+     * there is no way to detect the socket disconnection after MHD_run().
      *
-     * I've created the timer to check whether the user does not use
-     * the HTTP response. When the timer expires, an assertion occurs and
-     * terminates the program.
+     * In this case, the poll instance cannot be removed, so the CPU load
+     * of the program using MHD is 100%. POLLIN (POLLRDHUP) is still created,
+     * poll's callback function is still called.
+     *
+     * To solve this problem, we've created the timer to check
+     * whether the user does not use the HTTP response. When the timer expires,
+     * an assertion occurs and terminates the program.
+     *
+     * To avoid the above timer expiration, the user of HTTP server(MHD)
+     * should send an HTTP response if an HTTP client(CURL) is requested.
      */
     ogs_timer_t             *timer;
 
@@ -133,7 +135,7 @@ static ogs_mhd_session_t *session_add(ogs_sbi_server_t *server,
             ogs_app()->timer_mgr, session_timer_expired, mhd_sess);
     ogs_assert(mhd_sess->timer);
 
-    /* If User does not send http response within deadline,
+    /* If User does not send HTTP response within deadline,
      * Open5GS will assert this program. */
     ogs_timer_start(mhd_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
