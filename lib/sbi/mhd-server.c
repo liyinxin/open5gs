@@ -74,7 +74,7 @@ static void notify_completed(
 
 static void session_timer_expired(void *data);
 
-typedef struct ogs_mhd_session_s {
+typedef struct ogs_sbi_session_s {
     ogs_lnode_t             lnode;
 
     struct MHD_Connection   *connection;
@@ -100,9 +100,9 @@ typedef struct ogs_mhd_session_s {
     ogs_timer_t             *timer;
 
     void *data;
-} ogs_mhd_session_t;
+} ogs_sbi_session_t;
 
-static OGS_POOL(session_pool, ogs_mhd_session_t);
+static OGS_POOL(session_pool, ogs_sbi_session_t);
 
 static void server_init(int num_of_session_pool)
 {
@@ -114,84 +114,83 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static ogs_mhd_session_t *session_add(ogs_sbi_server_t *server,
+static ogs_sbi_session_t *session_add(ogs_sbi_server_t *server,
         ogs_sbi_request_t *request, struct MHD_Connection *connection)
 {
-    ogs_mhd_session_t *mhd_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(request);
     ogs_assert(connection);
 
-    ogs_pool_alloc(&session_pool, &mhd_sess);
-    ogs_assert(mhd_sess);
-    memset(mhd_sess, 0, sizeof(ogs_mhd_session_t));
+    ogs_pool_alloc(&session_pool, &sbi_sess);
+    ogs_assert(sbi_sess);
+    memset(sbi_sess, 0, sizeof(ogs_sbi_session_t));
 
-    mhd_sess->server = server;
-    mhd_sess->request = request;
-    mhd_sess->connection = connection;
+    sbi_sess->server = server;
+    sbi_sess->request = request;
+    sbi_sess->connection = connection;
 
-    mhd_sess->timer = ogs_timer_add(
-            ogs_app()->timer_mgr, session_timer_expired, mhd_sess);
-    ogs_assert(mhd_sess->timer);
+    sbi_sess->timer = ogs_timer_add(
+            ogs_app()->timer_mgr, session_timer_expired, sbi_sess);
+    ogs_assert(sbi_sess->timer);
 
     /* If User does not send HTTP response within deadline,
      * Open5GS will assert this program. */
-    ogs_timer_start(mhd_sess->timer,
+    ogs_timer_start(sbi_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
 
-    ogs_list_add(&server->suspended_session_list, mhd_sess);
+    ogs_list_add(&server->suspended_session_list, sbi_sess);
 
-    return mhd_sess;
+    return sbi_sess;
 }
 
-static void session_remove(ogs_mhd_session_t *mhd_sess)
+static void session_remove(ogs_sbi_session_t *sbi_sess)
 {
     struct MHD_Connection *connection;
     ogs_sbi_server_t *server = NULL;
 
-    ogs_assert(mhd_sess);
-    server = mhd_sess->server;
+    ogs_assert(sbi_sess);
+    server = sbi_sess->server;
     ogs_assert(server);
 
-    ogs_list_remove(&server->suspended_session_list, mhd_sess);
+    ogs_list_remove(&server->suspended_session_list, sbi_sess);
 
-    ogs_assert(mhd_sess->timer);
-    ogs_timer_delete(mhd_sess->timer);
+    ogs_assert(sbi_sess->timer);
+    ogs_timer_delete(sbi_sess->timer);
 
-    connection = mhd_sess->connection;
+    connection = sbi_sess->connection;
     ogs_assert(connection);
 
     MHD_resume_connection(connection);
 
-    ogs_pool_free(&session_pool, mhd_sess);
+    ogs_pool_free(&session_pool, sbi_sess);
 }
 
 static void session_timer_expired(void *data)
 {
-    ogs_mhd_session_t *mhd_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = data;
 
-    mhd_sess = data;
-    ogs_assert(mhd_sess);
+    ogs_assert(sbi_sess);
 
     ogs_fatal("An HTTP request was received, "
                 "but the HTTP response is missing.");
     ogs_fatal("Please send the related pcap files for this case.");
 
-    session_remove(mhd_sess);
+    session_remove(sbi_sess);
 
     ogs_assert_if_reached();
 }
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    ogs_mhd_session_t *mhd_sess = NULL, *next_mhd_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL, *next_sbi_sess = NULL;
 
     ogs_assert(server);
 
     ogs_list_for_each_safe(
-            &server->suspended_session_list, next_mhd_sess, mhd_sess)
-        session_remove(mhd_sess);
+            &server->suspended_session_list, next_sbi_sess, sbi_sess)
+        session_remove(sbi_sess);
 }
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
@@ -302,16 +301,14 @@ static void server_send_response(
     struct MHD_Daemon *mhd_daemon = NULL;
     const union MHD_ConnectionInfo *mhd_info = NULL;
     MHD_socket mhd_socket = INVALID_SOCKET;
-    ogs_mhd_session_t *mhd_sess = NULL;
 
     ogs_hash_index_t *hi;
     ogs_sbi_request_t *request = NULL;
 
+    ogs_assert(sbi_sess);
     ogs_assert(response);
 
-    mhd_sess = (ogs_mhd_session_t *)sbi_sess;
-    ogs_assert(mhd_sess);
-    connection = mhd_sess->connection;
+    connection = sbi_sess->connection;
     ogs_assert(connection);
 
     mhd_info = MHD_get_connection_info(
@@ -345,11 +342,11 @@ static void server_send_response(
     }
 
     status = response->status;
-    request = mhd_sess->request;
+    request = sbi_sess->request;
     ogs_assert(request);
 
     ogs_sbi_response_free(response);
-    session_remove(mhd_sess);
+    session_remove(sbi_sess);
 
     request->poll.write = ogs_pollset_add(ogs_app()->pollset,
                     OGS_POLLOUT, mhd_socket, run, mhd_daemon);
@@ -437,7 +434,6 @@ static _MHD_Result access_handler(
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_session_t *sbi_sess = NULL;
-    ogs_mhd_session_t *mhd_sess = NULL;
 
     server = cls;
     ogs_assert(server);
@@ -511,9 +507,7 @@ suspend:
     MHD_suspend_connection(connection);
     request->suspended = true;
 
-    mhd_sess = session_add(server, request, connection);
-    ogs_assert(mhd_sess);
-    sbi_sess = (ogs_sbi_session_t *)mhd_sess;
+    sbi_sess = session_add(server, request, connection);
     ogs_assert(sbi_sess);
 
     if (server->cb) {
@@ -552,11 +546,10 @@ static void notify_completed(
 
 static ogs_sbi_server_t *server_from_session(void *session)
 {
-    ogs_mhd_session_t *mhd_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = session;
 
-    mhd_sess = session;
-    ogs_assert(mhd_sess);
-    ogs_assert(mhd_sess->server);
+    ogs_assert(sbi_sess);
+    ogs_assert(sbi_sess->server);
 
-    return mhd_sess->server;
+    return sbi_sess->server;
 }
