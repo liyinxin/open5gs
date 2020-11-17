@@ -101,7 +101,7 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
     memcpy(nghttp2_sess->addr, &sock->remote_addr, sizeof(ogs_sockaddr_t));
 
     nghttp2_sess->poll.read = ogs_pollset_add(ogs_app()->pollset,
-        OGS_POLLIN, sock->fd, recv_handler, sock);
+        OGS_POLLIN, sock->fd, recv_handler, nghttp2_sess);
     ogs_assert(nghttp2_sess->poll.read);
 
     nghttp2_sess->timer = ogs_timer_add(
@@ -254,11 +254,31 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
 {
-    ogs_sock_t *sock = data;
+    ogs_nghttp2_session_t *nghttp2_sess = data;
+    ogs_pkbuf_t *pkbuf = NULL;
+    int n;
 
-    ogs_assert(sock);
+    ogs_assert(nghttp2_sess);
+
     ogs_assert(fd != INVALID_SOCKET);
     ogs_assert(when == OGS_POLLIN);
+
+    pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
+    ogs_assert(pkbuf);
+
+    n = ogs_recv(fd, pkbuf->data, OGS_MAX_SDU_LEN, 0);
+    if (n > 0) {
+        ogs_pkbuf_put(pkbuf, n);
+    } else {
+        if (n < 0)
+            ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno, "lost connection");
+        else if (n == 0)
+            ogs_error("connection closed");
+
+        session_remove(nghttp2_sess);
+    }
+
+    ogs_pkbuf_free(pkbuf);
 }
 
 static void server_send_response(
