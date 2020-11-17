@@ -303,8 +303,6 @@ static ogs_sbi_server_t *server_from_session(void *session)
     return sbi_sess->server;
 }
 
-static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
-                             size_t length, int flags, void *user_data);
 static int on_frame_recv_callback(nghttp2_session *session,
                                   const nghttp2_frame *frame, void *user_data);
 static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
@@ -316,6 +314,8 @@ static int on_header_callback(nghttp2_session *session,
 static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
                                      void *user_data);
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data);
 
 static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
 {
@@ -325,8 +325,6 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
 
     nghttp2_session_callbacks_new(&callbacks);
 
-    nghttp2_session_callbacks_set_send_callback(
-            callbacks, send_callback);
     nghttp2_session_callbacks_set_on_frame_recv_callback(
             callbacks, on_frame_recv_callback);
     nghttp2_session_callbacks_set_on_stream_close_callback(
@@ -335,31 +333,12 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
             callbacks, on_header_callback);
     nghttp2_session_callbacks_set_on_begin_headers_callback(
             callbacks, on_begin_headers_callback);
+    nghttp2_session_callbacks_set_send_callback(
+            callbacks, send_callback);
 
     nghttp2_session_server_new(&nghttp2_sess->session, callbacks, nghttp2_sess);
 
     nghttp2_session_callbacks_del(callbacks);
-}
-
-static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
-                             size_t length, int flags, void *user_data)
-{
-#if 0
-  http2_session_data *session_data = (http2_session_data *)user_data;
-  struct bufferevent *bev = session_data->bev;
-  (void)session;
-  (void)flags;
-
-  /* Avoid excessive buffering in server side. */
-  if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
-      OUTPUT_WOULDBLOCK_THRESHOLD) {
-    return NGHTTP2_ERR_WOULDBLOCK;
-  }
-  bufferevent_write(bev, data, length);
-  return (ssize_t)length;
-#else
-  return 0;
-#endif
 }
 
 static int on_frame_recv_callback(nghttp2_session *session,
@@ -458,6 +437,41 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                        stream_data);
 #endif
   return 0;
+}
+
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data)
+{
+    ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sock_t *sock = NULL;
+    ogs_socket_t fd = INVALID_SOCKET;
+
+    ogs_assert(sbi_sess);
+    sock = sbi_sess->sock;
+    ogs_assert(sock);
+    fd = sock->fd;
+    ogs_assert(fd != INVALID_SOCKET);
+
+    (void)session;
+    (void)flags;
+
+    return ogs_send(fd, data, length, 0);
+
+#if 0
+  http2_session_data *session_data = (http2_session_data *)user_data;
+  struct bufferevent *bev = session_data->bev;
+  (void)session;
+  (void)flags;
+
+  /* Avoid excessive buffering in server side. */
+  if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
+      OUTPUT_WOULDBLOCK_THRESHOLD) {
+    return NGHTTP2_ERR_WOULDBLOCK;
+  }
+  bufferevent_write(bev, data, length);
+  return (ssize_t)length;
+#endif
+
 }
 
 /* Send HTTP/2 client connection header, which includes 24 bytes
