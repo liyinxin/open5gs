@@ -24,12 +24,12 @@ static void server_init(int num_of_session_pool);
 static void server_final(void);
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_server_t *server, ogs_sbi_session_t *sbi_sess,
             ogs_sbi_request_t *request));
 static void server_stop(ogs_sbi_server_t *server);
 
 static void server_send_response(
-        ogs_sbi_session_t *session, ogs_sbi_response_t *response);
+        ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response);
 
 static ogs_sbi_server_t *server_from_session(void *session);
 
@@ -79,13 +79,12 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static nghttp2_session_t *session_add(ogs_sbi_server_t *server,
-        ogs_sbi_request_t *request, ogs_sock_t *sock)
+static nghttp2_session_t *session_add(
+        ogs_sbi_server_t *server, ogs_sock_t *sock)
 {
     nghttp2_session_t *nghttp2_sess = NULL;
 
     ogs_assert(server);
-    ogs_assert(request);
     ogs_assert(sock);
 
     ogs_pool_alloc(&session_pool, &nghttp2_sess);
@@ -93,7 +92,6 @@ static nghttp2_session_t *session_add(ogs_sbi_server_t *server,
     memset(nghttp2_sess, 0, sizeof(nghttp2_session_t));
 
     nghttp2_sess->server = server;
-    nghttp2_sess->request = request;
     nghttp2_sess->sock = sock;
 
     nghttp2_sess->addr = ogs_calloc(1, sizeof(ogs_sockaddr_t));
@@ -126,6 +124,9 @@ static void session_remove(nghttp2_session_t *nghttp2_sess)
     ogs_assert(server);
 
     ogs_list_remove(&server->suspended_session_list, nghttp2_sess);
+
+    /* TODO:
+     * delete request */
 
     ogs_assert(nghttp2_sess->timer);
     ogs_timer_delete(nghttp2_sess->timer);
@@ -171,7 +172,7 @@ static void session_remove_all(ogs_sbi_server_t *server)
 }
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_server_t *server, ogs_sbi_session_t *sbi_sess,
             ogs_sbi_request_t *request))
 {
     char buf[OGS_ADDRSTRLEN];
@@ -224,12 +225,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 #endif
 
     ogs_sbi_server_t *server = data;
-#if 0
-    ogs_sbi_request_t *request = NULL;
-#else
-    ogs_sbi_request_t *request = (ogs_sbi_request_t *)1;
-#endif
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
     nghttp2_session_t *nghttp2_sess = NULL;
     ogs_sock_t *sock = NULL;
@@ -246,10 +242,10 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
         return;
     }
 
-    nghttp2_sess = session_add(server, request, new);
+    nghttp2_sess = session_add(server, new);
     ogs_assert(nghttp2_sess);
-    session = (ogs_sbi_session_t *)nghttp2_sess;
-    ogs_assert(session);
+    sbi_sess = (ogs_sbi_session_t *)nghttp2_sess;
+    ogs_assert(sbi_sess);
 }
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
@@ -282,7 +278,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
 }
 
 static void server_send_response(
-        ogs_sbi_session_t *session, ogs_sbi_response_t *response)
+        ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
 }
 

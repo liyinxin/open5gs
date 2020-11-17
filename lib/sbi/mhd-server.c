@@ -32,12 +32,12 @@ static void server_init(int num_of_session_pool);
 static void server_final(void);
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_server_t *server, ogs_sbi_session_t *sbi_sess,
             ogs_sbi_request_t *request));
 static void server_stop(ogs_sbi_server_t *server);
 
 static void server_send_response(
-        ogs_sbi_session_t *session, ogs_sbi_response_t *response);
+        ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response);
 
 static ogs_sbi_server_t *server_from_session(void *session);
 
@@ -195,7 +195,7 @@ static void session_remove_all(ogs_sbi_server_t *server)
 }
 
 static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_server_t *server, ogs_sbi_session_t *sbi_sess,
             ogs_sbi_request_t *request))
 {
     char buf[OGS_ADDRSTRLEN];
@@ -292,7 +292,7 @@ static void server_stop(ogs_sbi_server_t *server)
 }
 
 static void server_send_response(
-        ogs_sbi_session_t *session, ogs_sbi_response_t *response)
+        ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
     int ret;
     int status;
@@ -309,7 +309,7 @@ static void server_send_response(
 
     ogs_assert(response);
 
-    mhd_sess = (mhd_session_t *)session;
+    mhd_sess = (mhd_session_t *)sbi_sess;
     ogs_assert(mhd_sess);
     connection = mhd_sess->connection;
     ogs_assert(connection);
@@ -436,7 +436,7 @@ static _MHD_Result access_handler(
 {
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
     mhd_session_t *mhd_sess = NULL;
 
     server = cls;
@@ -513,13 +513,13 @@ suspend:
 
     mhd_sess = session_add(server, request, connection);
     ogs_assert(mhd_sess);
-    session = (ogs_sbi_session_t *)mhd_sess;
-    ogs_assert(session);
+    sbi_sess = (ogs_sbi_session_t *)mhd_sess;
+    ogs_assert(sbi_sess);
 
     if (server->cb) {
-        if (server->cb(server, session, request) != OGS_OK) {
+        if (server->cb(server, sbi_sess, request) != OGS_OK) {
             ogs_warn("server callback error");
-            ogs_sbi_server_send_error(session,
+            ogs_sbi_server_send_error(sbi_sess,
                     OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
                     "server callback error", NULL);
 
