@@ -349,9 +349,9 @@ static void server_send_response(
     ogs_sbi_response_free(response);
     session_remove(mhd_sess);
 
-    request->poll = ogs_pollset_add(ogs_app()->pollset,
+    request->poll.write = ogs_pollset_add(ogs_app()->pollset,
                     OGS_POLLOUT, mhd_socket, run, mhd_daemon);
-    ogs_assert(request->poll);
+    ogs_assert(request->poll.write);
 
     ret = MHD_queue_response(connection, status, mhd_response);
     if (ret != MHD_YES) {
@@ -538,7 +538,7 @@ static void notify_completed(
     ogs_poll_t *poll = NULL;
 
     ogs_assert(request);
-    poll = request->poll;
+    poll = ogs_pollset_cycle(ogs_app()->pollset, request->poll.write);
     if (poll)
         ogs_pollset_remove(poll);
 
