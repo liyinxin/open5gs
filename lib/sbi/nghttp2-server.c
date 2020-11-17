@@ -258,11 +258,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
 
     ogs_assert(sock);
     ogs_assert(fd != INVALID_SOCKET);
-
-    if (when == OGS_POLLIN) {
-    } else if (when == OGS_POLLOUT) {
-    } else
-        ogs_assert_if_reached();
+    ogs_assert(when == OGS_POLLIN);
 }
 
 static void server_send_response(
