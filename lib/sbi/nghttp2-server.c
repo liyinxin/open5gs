@@ -72,6 +72,8 @@ typedef struct ogs_sbi_session_s {
 } ogs_sbi_session_t;
 
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
+static int send_server_connection_header(ogs_sbi_session_t *sbi_sess);
+static int session_send(ogs_sbi_session_t *sbi_sess);
 
 static OGS_POOL(session_pool, ogs_sbi_session_t);
 
@@ -250,13 +252,11 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
     initialize_nghttp2_session(sbi_sess);
 
-#if 0
-    if (send_server_connection_header(session_data) != 0 ||
-        session_send(session_data) != 0) {
+    if (send_server_connection_header(sbi_sess) != OGS_OK ||
+        session_send(sbi_sess) != OGS_OK) {
         session_remove(sbi_sess);
         return;
     }
-#endif
 }
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
@@ -458,4 +458,42 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                        stream_data);
 #endif
   return 0;
+}
+
+/* Send HTTP/2 client connection header, which includes 24 bytes
+   magic octets and SETTINGS frame */
+static int send_server_connection_header(ogs_sbi_session_t *sbi_sess)
+{
+    nghttp2_settings_entry iv[1] = {
+        { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
+    };
+    int rv;
+
+    ogs_assert(sbi_sess);
+
+    rv = nghttp2_submit_settings(
+            sbi_sess->session, NGHTTP2_FLAG_NONE, iv, OGS_ARRAY_SIZE(iv));
+    if (rv != 0) {
+        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                "nghttp2_submit_settings() failed");
+        return OGS_ERROR;
+    }
+    return OGS_OK;
+}
+
+/* Serialize the frame and send (or buffer) the data to
+   bufferevent. */
+static int session_send(ogs_sbi_session_t *sbi_sess)
+{
+    int rv;
+
+    ogs_assert(sbi_sess);
+
+    rv = nghttp2_session_send(sbi_sess->session);
+    if (rv != 0) {
+        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                "nghttp_session_send() failed");
+        return OGS_ERROR;
+    }
+    return OGS_OK;
 }
