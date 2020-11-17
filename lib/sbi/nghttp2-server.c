@@ -49,7 +49,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data);
 
 static void session_timer_expired(void *data);
 
-typedef struct ogs_nghttp2_session_s {
+typedef struct nghttp2_session_s {
     ogs_lnode_t             lnode;
 
     ogs_sock_t              *sock;
@@ -65,9 +65,9 @@ typedef struct ogs_nghttp2_session_s {
     ogs_timer_t             *timer;
 
     void *data;
-} ogs_nghttp2_session_t;
+} nghttp2_session_t;
 
-static OGS_POOL(session_pool, ogs_nghttp2_session_t);
+static OGS_POOL(session_pool, nghttp2_session_t);
 
 static void server_init(int num_of_session_pool)
 {
@@ -79,10 +79,10 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
+static nghttp2_session_t *session_add(ogs_sbi_server_t *server,
         ogs_sbi_request_t *request, ogs_sock_t *sock)
 {
-    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+    nghttp2_session_t *nghttp2_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(request);
@@ -90,7 +90,7 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
 
     ogs_pool_alloc(&session_pool, &nghttp2_sess);
     ogs_assert(nghttp2_sess);
-    memset(nghttp2_sess, 0, sizeof(ogs_nghttp2_session_t));
+    memset(nghttp2_sess, 0, sizeof(nghttp2_session_t));
 
     nghttp2_sess->server = server;
     nghttp2_sess->request = request;
@@ -116,7 +116,7 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
     return nghttp2_sess;
 }
 
-static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
+static void session_remove(nghttp2_session_t *nghttp2_sess)
 {
     ogs_sbi_server_t *server = NULL;
     ogs_poll_t *poll = NULL;
@@ -149,7 +149,7 @@ static void session_remove(ogs_nghttp2_session_t *nghttp2_sess)
 
 static void session_timer_expired(void *data)
 {
-    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+    nghttp2_session_t *nghttp2_sess = NULL;
 
     nghttp2_sess = data;
     ogs_assert(nghttp2_sess);
@@ -161,7 +161,7 @@ static void session_timer_expired(void *data)
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    ogs_nghttp2_session_t *nghttp2_sess = NULL, *next_nghttp2_sess = NULL;
+    nghttp2_session_t *nghttp2_sess = NULL, *next_nghttp2_sess = NULL;
 
     ogs_assert(server);
 
@@ -231,7 +231,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 #endif
     ogs_sbi_session_t *session = NULL;
 
-    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+    nghttp2_session_t *nghttp2_sess = NULL;
     ogs_sock_t *sock = NULL;
     ogs_sock_t *new = NULL;
 
@@ -254,7 +254,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
 {
-    ogs_nghttp2_session_t *nghttp2_sess = data;
+    nghttp2_session_t *nghttp2_sess = data;
     ogs_pkbuf_t *pkbuf = NULL;
     int n;
 
@@ -288,7 +288,7 @@ static void server_send_response(
 
 static ogs_sbi_server_t *server_from_session(void *session)
 {
-    ogs_nghttp2_session_t *nghttp2_sess = NULL;
+    nghttp2_session_t *nghttp2_sess = NULL;
 
     nghttp2_sess = session;
     ogs_assert(nghttp2_sess);
