@@ -62,19 +62,6 @@ typedef struct ogs_nghttp2_session_s {
     ogs_sbi_request_t       *request;
     ogs_sbi_server_t        *server;
 
-    /*
-     * The HTTP server(MHD) should send an HTTP response
-     * if an HTTP client(CURL) is requested.
-     *
-     * If the HTTP client closes the socket without sending an HTTP response,
-     * the CPU load of a program using MHD is 100%. This is because
-     * POLLIN(POLLRDHUP) is generated. So, the callback function of poll
-     * continues to be called.
-     *
-     * I've created the timer to check whether the user does not use
-     * the HTTP response. When the timer expires, an assertion occurs and
-     * terminates the program.
-     */
     ogs_timer_t             *timer;
 
     void *data;
@@ -121,8 +108,6 @@ static ogs_nghttp2_session_t *session_add(ogs_sbi_server_t *server,
             ogs_app()->timer_mgr, session_timer_expired, nghttp2_sess);
     ogs_assert(nghttp2_sess->timer);
 
-    /* If User does not send http response within deadline,
-     * Open5GS will assert this program. */
     ogs_timer_start(nghttp2_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
 
@@ -169,13 +154,9 @@ static void session_timer_expired(void *data)
     nghttp2_sess = data;
     ogs_assert(nghttp2_sess);
 
-    ogs_fatal("An HTTP request was received, "
-                "but the HTTP response is missing.");
-    ogs_fatal("Please send the related pcap files for this case.");
+    ogs_error("An HTTP was requested, but the HTTP response is missing.");
 
     session_remove(nghttp2_sess);
-
-    ogs_assert_if_reached();
 }
 
 static void session_remove_all(ogs_sbi_server_t *server)
