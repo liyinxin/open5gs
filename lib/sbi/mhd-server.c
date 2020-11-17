@@ -378,7 +378,9 @@ static void notify_connection(void *cls,
     MHD_socket mhd_socket = INVALID_SOCKET;
 
     const union MHD_ConnectionInfo *mhd_info = NULL;
-    ogs_poll_t *poll = NULL;
+    struct {
+        ogs_poll_t *read;
+    } poll;
 
     switch (toe) {
         case MHD_CONNECTION_NOTIFY_STARTED:
@@ -394,14 +396,14 @@ static void notify_connection(void *cls,
             mhd_socket = mhd_info->connect_fd;
             ogs_assert(mhd_socket != INVALID_SOCKET);
 
-            poll = ogs_pollset_add(ogs_app()->pollset,
+            poll.read = ogs_pollset_add(ogs_app()->pollset,
                     OGS_POLLIN, mhd_socket, run, mhd_daemon);
-            ogs_assert(poll);
-            *socket_context = poll;
+            ogs_assert(poll.read);
+            *socket_context = poll.read;
             break;
         case MHD_CONNECTION_NOTIFY_CLOSED:
-            poll = *socket_context;
-            ogs_pollset_remove(poll);
+            poll.read = *socket_context;
+            ogs_pollset_remove(poll.read);
             break;
     }
 }

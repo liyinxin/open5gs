@@ -279,7 +279,6 @@ typedef struct ogs_sbi_request_s {
     /* Used in microhttpd */
     bool suspended;
     struct {
-        ogs_poll_t *read;
         ogs_poll_t *write;
     } poll;
 } ogs_sbi_request_t;
