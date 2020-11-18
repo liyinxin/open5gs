@@ -273,29 +273,26 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     int n;
 
     ogs_assert(sbi_sess);
-
     ogs_assert(fd != INVALID_SOCKET);
-    if (when == OGS_POLLIN) {
-        pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
-        ogs_assert(pkbuf);
 
-        n = ogs_recv(fd, pkbuf->data, OGS_MAX_SDU_LEN, 0);
-        if (n > 0) {
-            ogs_pkbuf_put(pkbuf, n);
-        } else {
-            if (n < 0)
-                ogs_log_message(OGS_LOG_ERROR,
-                        ogs_socket_errno, "lost connection");
-            else if (n == 0)
-                ogs_error("connection closed");
+    pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
+    ogs_assert(pkbuf);
 
-            session_remove(sbi_sess);
-        }
+    n = ogs_recv(fd, pkbuf->data, OGS_MAX_SDU_LEN, 0);
+    if (n > 0) {
+        ogs_pkbuf_put(pkbuf, n);
 
-        ogs_pkbuf_free(pkbuf);
     } else {
-        ogs_fatal("OGS_POLLOUT = 0x%x", when);
+        if (n < 0)
+            ogs_log_message(OGS_LOG_ERROR,
+                    ogs_socket_errno, "lost connection");
+        else if (n == 0)
+            ogs_error("connection closed");
+
+        session_remove(sbi_sess);
     }
+
+    ogs_pkbuf_free(pkbuf);
 }
 
 static void server_send_response(
@@ -463,9 +460,6 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
     ogs_assert(sock);
     fd = sock->fd;
     ogs_assert(fd != INVALID_SOCKET);
-
-    (void)session;
-    (void)flags;
 
     ogs_assert(data);
     ogs_assert(length);
