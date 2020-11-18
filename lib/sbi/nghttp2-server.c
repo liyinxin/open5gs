@@ -61,19 +61,24 @@ typedef struct ogs_sbi_session_s {
         ogs_poll_t          *write;
     } poll;
 
+    nghttp2_session         *session;
+    ogs_list_t              write_queue;
+
     ogs_sbi_request_t       *request;
     ogs_sbi_server_t        *server;
 
     ogs_timer_t             *timer;
 
     void *data;
-
-    nghttp2_session         *session;
 } ogs_sbi_session_t;
 
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
 static int send_server_connection_header(ogs_sbi_session_t *sbi_sess);
 static int session_send(ogs_sbi_session_t *sbi_sess);
+
+static void session_write_to_buffer(
+        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
+static void session_write_callback(short when, ogs_socket_t fd, void *data);
 
 static OGS_POOL(session_pool, ogs_sbi_session_t);
 
@@ -227,10 +232,6 @@ static void server_stop(ogs_sbi_server_t *server)
 
 static void accept_handler(short when, ogs_socket_t fd, void *data)
 {
-#if 0
-    char buf[OGS_ADDRSTRLEN];
-#endif
-
     ogs_sbi_server_t *server = data;
     ogs_sbi_session_t *sbi_sess = NULL;
     ogs_sock_t *sock = NULL;
@@ -252,8 +253,14 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
     initialize_nghttp2_session(sbi_sess);
 
-    if (send_server_connection_header(sbi_sess) != OGS_OK ||
-        session_send(sbi_sess) != OGS_OK) {
+    if (send_server_connection_header(sbi_sess) != OGS_OK) {
+        ogs_error("send_server_connection_header() failed");
+        session_remove(sbi_sess);
+        return;
+    }
+
+    if (session_send(sbi_sess) != OGS_OK) {
+        ogs_error("session_send() failed");
         session_remove(sbi_sess);
         return;
     }
@@ -268,24 +275,27 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     ogs_assert(sbi_sess);
 
     ogs_assert(fd != INVALID_SOCKET);
-    ogs_assert(when == OGS_POLLIN);
+    if (when == OGS_POLLIN) {
+        pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
+        ogs_assert(pkbuf);
 
-    pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
-    ogs_assert(pkbuf);
+        n = ogs_recv(fd, pkbuf->data, OGS_MAX_SDU_LEN, 0);
+        if (n > 0) {
+            ogs_pkbuf_put(pkbuf, n);
+        } else {
+            if (n < 0)
+                ogs_log_message(OGS_LOG_ERROR,
+                        ogs_socket_errno, "lost connection");
+            else if (n == 0)
+                ogs_error("connection closed");
 
-    n = ogs_recv(fd, pkbuf->data, OGS_MAX_SDU_LEN, 0);
-    if (n > 0) {
-        ogs_pkbuf_put(pkbuf, n);
+            session_remove(sbi_sess);
+        }
+
+        ogs_pkbuf_free(pkbuf);
     } else {
-        if (n < 0)
-            ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno, "lost connection");
-        else if (n == 0)
-            ogs_error("connection closed");
-
-        session_remove(sbi_sess);
+        ogs_fatal("OGS_POLLOUT = 0x%x", when);
     }
-
-    ogs_pkbuf_free(pkbuf);
 }
 
 static void server_send_response(
@@ -446,6 +456,8 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
     ogs_sock_t *sock = NULL;
     ogs_socket_t fd = INVALID_SOCKET;
 
+    ogs_pkbuf_t *pkbuf = NULL;
+
     ogs_assert(sbi_sess);
     sock = sbi_sess->sock;
     ogs_assert(sock);
@@ -455,23 +467,16 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
     (void)session;
     (void)flags;
 
-    return ogs_send(fd, data, length, 0);
+    ogs_assert(data);
+    ogs_assert(length);
 
-#if 0
-  http2_session_data *session_data = (http2_session_data *)user_data;
-  struct bufferevent *bev = session_data->bev;
-  (void)session;
-  (void)flags;
+    pkbuf = ogs_pkbuf_alloc(NULL, length);
+    ogs_assert(pkbuf);
+    ogs_pkbuf_put_data(pkbuf, data, length);
 
-  /* Avoid excessive buffering in server side. */
-  if (evbuffer_get_length(bufferevent_get_output(session_data->bev)) >=
-      OUTPUT_WOULDBLOCK_THRESHOLD) {
-    return NGHTTP2_ERR_WOULDBLOCK;
-  }
-  bufferevent_write(bev, data, length);
-  return (ssize_t)length;
-#endif
+    session_write_to_buffer(sbi_sess, pkbuf);
 
+    return length;
 }
 
 /* Send HTTP/2 client connection header, which includes 24 bytes
@@ -495,8 +500,7 @@ static int send_server_connection_header(ogs_sbi_session_t *sbi_sess)
     return OGS_OK;
 }
 
-/* Serialize the frame and send (or buffer) the data to
-   bufferevent. */
+/* Serialize the frame and send (or buffer) the data to buffer. */
 static int session_send(ogs_sbi_session_t *sbi_sess)
 {
     int rv;
@@ -510,4 +514,49 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
         return OGS_ERROR;
     }
     return OGS_OK;
+}
+
+static void session_write_to_buffer(
+        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf)
+{
+    ogs_sock_t *sock = NULL;
+    ogs_socket_t fd = INVALID_SOCKET;
+
+    ogs_poll_t *poll = NULL;
+
+    ogs_assert(pkbuf);
+
+    ogs_assert(sbi_sess);
+    sock = sbi_sess->sock;
+    ogs_assert(sock);
+    fd = sock->fd;
+    ogs_assert(fd != INVALID_SOCKET);
+
+    ogs_list_add(&sbi_sess->write_queue, pkbuf);
+
+    poll = ogs_pollset_cycle(ogs_app()->pollset, sbi_sess->poll.write);
+    if (!poll)
+        sbi_sess->poll.write = ogs_pollset_add(ogs_app()->pollset,
+            OGS_POLLOUT, fd, session_write_callback, sbi_sess);
+}
+
+static void session_write_callback(short when, ogs_socket_t fd, void *data)
+{
+    ogs_sbi_session_t *sbi_sess = data;
+    ogs_pkbuf_t *pkbuf = NULL;
+
+    ogs_assert(sbi_sess);
+
+    if (ogs_list_empty(&sbi_sess->write_queue) == true) {
+        ogs_assert(sbi_sess->poll.write);
+        ogs_pollset_remove(sbi_sess->poll.write);
+        return;
+    }
+
+    pkbuf = ogs_list_first(&sbi_sess->write_queue);
+    ogs_assert(pkbuf);
+    ogs_list_remove(&sbi_sess->write_queue, pkbuf);
+
+    ogs_send(fd, pkbuf->data, pkbuf->len, 0);
+    ogs_pkbuf_free(pkbuf);
 }
