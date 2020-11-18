@@ -20,6 +20,8 @@
 #include "ogs-app.h"
 #include "ogs-sbi.h"
 
+#include <netinet/tcp.h>
+
 #include <nghttp2/nghttp2.h>
 
 static void server_init(int num_of_session_pool);
@@ -110,10 +112,6 @@ static ogs_sbi_session_t *session_add(
     sbi_sess->addr = ogs_calloc(1, sizeof(ogs_sockaddr_t));
     ogs_assert(sbi_sess->addr);
     memcpy(sbi_sess->addr, &sock->remote_addr, sizeof(ogs_sockaddr_t));
-
-    sbi_sess->poll.read = ogs_pollset_add(ogs_app()->pollset,
-        OGS_POLLIN, sock->fd, recv_handler, sbi_sess);
-    ogs_assert(sbi_sess->poll.read);
 
     sbi_sess->timer = ogs_timer_add(
             ogs_app()->timer_mgr, session_timer_expired, sbi_sess);
@@ -237,6 +235,8 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
     ogs_sock_t *sock = NULL;
     ogs_sock_t *new = NULL;
 
+    int on;
+
     ogs_assert(data);
     ogs_assert(fd != INVALID_SOCKET);
 
@@ -247,9 +247,21 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
         ogs_error("ogs_sock_accept() failed");
         return;
     }
+    ogs_assert(new->fd != INVALID_SOCKET);
+
+    on = 1;
+    if (setsockopt(new->fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) != 0) {
+        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                "setsockopt for SCTP_NODELAY failed");
+        return;
+    }
 
     sbi_sess = session_add(server, new);
     ogs_assert(sbi_sess);
+
+    sbi_sess->poll.read = ogs_pollset_add(ogs_app()->pollset,
+        OGS_POLLIN, new->fd, recv_handler, sbi_sess);
+    ogs_assert(sbi_sess->poll.read);
 
     initialize_nghttp2_session(sbi_sess);
 
