@@ -422,20 +422,33 @@ static int on_header_callback(nghttp2_session *session,
 {
     ogs_sbi_request_t *request = NULL;
 
+    const char PATH[] = ":path";
+    const char METHOD[] = ":method";
+    (void)flags;
+    (void)user_data;
+
     switch (frame->hd.type) {
     case NGHTTP2_HEADERS:
         if (frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
             break;
         }
+
         request = nghttp2_session_get_stream_user_data(
                 session, frame->hd.stream_id);
-        if (!request) {
+        if (!request || request->h.uri) {
             break;
         }
 
-        /* TODO : URI */
+        if (namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
+            request->h.uri = ogs_strndup((const char *)value, valuelen);
 
+        } else if (namelen == sizeof(METHOD) - 1 &&
+                memcmp(METHOD, name, namelen) == 0) {
+            request->h.method = ogs_strndup((const char *)value, valuelen);
+
+        }
         break;
+
     default:
         break;
     }
