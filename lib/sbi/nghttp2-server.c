@@ -456,7 +456,18 @@ static int on_header_callback2(nghttp2_session *session,
     namestr = ogs_strndup((const char *)namebuf.base, namebuf.len);
     if (!namestr) {
         ogs_error("ogs_strndup() failed");
-        submit_rst_stream(sbi_sess, request, NGHTTP2_INTERNAL_ERROR);
+        if (submit_rst_stream(
+                    sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
+            ogs_error("submit_rst_stream() failed");
+            session_remove(sbi_sess);
+            return 0;
+        }
+
+        if (session_send(sbi_sess) != OGS_OK) {
+            ogs_error("session_send() failed");
+            session_remove(sbi_sess);
+            return 0;
+        }
 
         return 0;
     }
@@ -464,7 +475,18 @@ static int on_header_callback2(nghttp2_session *session,
     valuestr = ogs_strndup((const char *)valuebuf.base, valuebuf.len);
     if (!valuestr) {
         ogs_error("ogs_strndup() failed");
-        submit_rst_stream(sbi_sess, request, NGHTTP2_INTERNAL_ERROR);
+        if (submit_rst_stream(
+                    sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
+            ogs_error("submit_rst_stream() failed");
+            session_remove(sbi_sess);
+            return 0;
+        }
+
+        if (session_send(sbi_sess) != OGS_OK) {
+            ogs_error("session_send() failed");
+            session_remove(sbi_sess);
+            return 0;
+        }
 
         ogs_free(namestr);
         return 0;
