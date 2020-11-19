@@ -130,6 +130,7 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL, *next_request = NULL;
     ogs_poll_t *poll = NULL;
+    ogs_pkbuf_t *pkbuf = NULL, *next_pkbuf = NULL;
 
     ogs_assert(sbi_sess);
     server = sbi_sess->server;
@@ -152,6 +153,9 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
     poll = ogs_pollset_cycle(ogs_app()->pollset, sbi_sess->poll.write);
     if (poll)
         ogs_pollset_remove(poll);
+
+    ogs_list_for_each_safe(&sbi_sess->write_queue, next_pkbuf, pkbuf)
+        ogs_pkbuf_free(pkbuf);
 
     ogs_assert(sbi_sess->addr);
     ogs_free(sbi_sess->addr);
