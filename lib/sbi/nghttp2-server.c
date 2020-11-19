@@ -424,6 +424,8 @@ static int on_header_callback(nghttp2_session *session,
 
     const char PATH[] = ":path";
     const char METHOD[] = ":method";
+    char *namestr = NULL, *valuestr = NULL;
+
     (void)flags;
     (void)user_data;
 
@@ -435,18 +437,28 @@ static int on_header_callback(nghttp2_session *session,
 
         request = nghttp2_session_get_stream_user_data(
                 session, frame->hd.stream_id);
-        if (!request || request->h.uri) {
+        if (!request) {
             break;
         }
 
+        namestr = ogs_strndup((const char *)name, namelen);
+        ogs_assert(namestr);
+        valuestr = ogs_strndup((const char *)value, valuelen);
+        ogs_assert(valuestr);
+
         if (namelen == sizeof(PATH) - 1 && memcmp(PATH, name, namelen) == 0) {
-            request->h.uri = ogs_strndup((const char *)value, valuelen);
+            request->h.uri = valuestr;
 
         } else if (namelen == sizeof(METHOD) - 1 &&
                 memcmp(METHOD, name, namelen) == 0) {
-            request->h.method = ogs_strndup((const char *)value, valuelen);
+            request->h.method = valuestr;
 
+        } else {
+            ogs_sbi_header_set(request->http.headers, namestr, valuestr);
         }
+
+        ogs_free(namestr);
+        ogs_free(valuestr);
         break;
 
     default:
