@@ -273,6 +273,8 @@ typedef struct ogs_sbi_http_message_s {
 } ogs_sbi_http_message_t;
 
 typedef struct ogs_sbi_request_s {
+    ogs_lnode_t lnode;
+
     ogs_sbi_header_t h;
     ogs_sbi_http_message_t http;
 
