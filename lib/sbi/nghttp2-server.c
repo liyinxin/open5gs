@@ -467,20 +467,22 @@ static int on_header_callback2(nghttp2_session *session,
 
     if (namebuf.len == sizeof(PATH) - 1 &&
             memcmp(PATH, namebuf.base, namebuf.len) == 0) {
-        char *query = NULL;
-#define MAX_QUERY_PARAM 16
-        struct yuarel_param params[MAX_QUERY_PARAM];
+        char *saveptr = NULL, *query;
+#define MAX_NUM_OF_PARAM_IN_QUERY 16
+        struct yuarel_param params[MAX_NUM_OF_PARAM_IN_QUERY+2];
         int j;
 
-        request->h.uri = ogs_sbi_parse_uri(valuestr, "?", &query);
+        request->h.uri = ogs_sbi_parse_uri(valuestr, "?", &saveptr);
         if (!request->h.uri) {
             ogs_error("ogs_sbi_parse_uri() failed");
             goto cleanup;
         }
 
         memset(params, 0, sizeof(params));
+
+        query = ogs_sbi_parse_uri(NULL, "?", &saveptr);
         if (query && *query && strlen(query))
-            yuarel_parse_query(query, '&', params, MAX_QUERY_PARAM);
+            yuarel_parse_query(query, '&', params, MAX_NUM_OF_PARAM_IN_QUERY+1);
 
         j = 0;
         while(params[j].key && params[j].val) {
@@ -488,6 +490,13 @@ static int on_header_callback2(nghttp2_session *session,
                     params[j].key, params[j].val);
             j++;
         }
+
+        if (j >= MAX_NUM_OF_PARAM_IN_QUERY+1) {
+            ogs_fatal("The number(16) of query param is not enough");
+            ogs_assert_if_reached();
+        }
+
+        ogs_free(query);
 
     } else if (namebuf.len == sizeof(METHOD) - 1 &&
             memcmp(METHOD, namebuf.base, namebuf.len) == 0) {
