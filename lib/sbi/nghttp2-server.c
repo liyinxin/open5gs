@@ -19,9 +19,9 @@
 
 #include "ogs-app.h"
 #include "ogs-sbi.h"
+#include "yuarel.h"
 
 #include <netinet/tcp.h>
-
 #include <nghttp2/nghttp2.h>
 
 static void server_init(int num_of_session_pool);
@@ -456,56 +456,70 @@ static int on_header_callback2(nghttp2_session *session,
     namestr = ogs_strndup((const char *)namebuf.base, namebuf.len);
     if (!namestr) {
         ogs_error("ogs_strndup() failed");
-        if (submit_rst_stream(
-                    sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
-            ogs_error("submit_rst_stream() failed");
-            session_remove(sbi_sess);
-            return 0;
-        }
-
-        if (session_send(sbi_sess) != OGS_OK) {
-            ogs_error("session_send() failed");
-            session_remove(sbi_sess);
-            return 0;
-        }
-
-        return 0;
+        goto cleanup;
     }
 
     valuestr = ogs_strndup((const char *)valuebuf.base, valuebuf.len);
     if (!valuestr) {
         ogs_error("ogs_strndup() failed");
-        if (submit_rst_stream(
-                    sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
-            ogs_error("submit_rst_stream() failed");
-            session_remove(sbi_sess);
-            return 0;
-        }
-
-        if (session_send(sbi_sess) != OGS_OK) {
-            ogs_error("session_send() failed");
-            session_remove(sbi_sess);
-            return 0;
-        }
-
-        ogs_free(namestr);
-        return 0;
+        goto cleanup;
     }
 
     if (namebuf.len == sizeof(PATH) - 1 &&
             memcmp(PATH, namebuf.base, namebuf.len) == 0) {
-        request->h.uri = valuestr;
+        char *query = NULL;
+#define MAX_QUERY_PARAM 16
+        struct yuarel_param params[MAX_QUERY_PARAM];
+        int j;
+
+        request->h.uri = ogs_sbi_parse_uri(valuestr, "?", &query);
+        if (!request->h.uri) {
+            ogs_error("ogs_sbi_parse_uri() failed");
+            goto cleanup;
+        }
+
+        memset(params, 0, sizeof(params));
+        if (query && *query && strlen(query))
+            yuarel_parse_query(query, '&', params, MAX_QUERY_PARAM);
+
+        j = 0;
+        while(params[j].key && params[j].val) {
+            ogs_sbi_header_set(request->http.params,
+                    params[j].key, params[j].val);
+            j++;
+        }
 
     } else if (namebuf.len == sizeof(METHOD) - 1 &&
             memcmp(METHOD, namebuf.base, namebuf.len) == 0) {
+
         request->h.method = valuestr;
 
     } else {
+
         ogs_sbi_header_set(request->http.headers, namestr, valuestr);
     }
 
-    ogs_free(namestr);
-    ogs_free(valuestr);
+    if (namestr) ogs_free(namestr);
+    if (valuestr) ogs_free(valuestr);
+
+    return 0;
+
+cleanup:
+    if (submit_rst_stream(
+                sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
+        ogs_error("submit_rst_stream() failed");
+        session_remove(sbi_sess);
+        return 0;
+    }
+
+    if (session_send(sbi_sess) != OGS_OK) {
+        ogs_error("session_send() failed");
+        session_remove(sbi_sess);
+        return 0;
+    }
+
+    if (namestr) ogs_free(namestr);
+    if (valuestr) ogs_free(valuestr);
 
     return 0;
 }
