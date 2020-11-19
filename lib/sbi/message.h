@@ -283,6 +283,9 @@ typedef struct ogs_sbi_request_s {
     struct {
         ogs_poll_t *write;
     } poll;
+
+    /* Used in nghttp2 */
+    int32_t stream_id;
 } ogs_sbi_request_t;
 
 typedef struct ogs_sbi_response_s {
