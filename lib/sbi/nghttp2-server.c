@@ -66,8 +66,8 @@ typedef struct ogs_sbi_session_s {
     nghttp2_session         *session;
     ogs_list_t              write_queue;
 
-    ogs_sbi_request_t       *request;
     ogs_sbi_server_t        *server;
+    ogs_list_t              stream_list;
 
     ogs_timer_t             *timer;
 
@@ -128,6 +128,7 @@ static ogs_sbi_session_t *session_add(
 static void session_remove(ogs_sbi_session_t *sbi_sess)
 {
     ogs_sbi_server_t *server = NULL;
+    ogs_sbi_request_t *request = NULL, *next_request = NULL;
     ogs_poll_t *poll = NULL;
 
     ogs_assert(sbi_sess);
@@ -136,11 +137,13 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
 
     ogs_list_remove(&server->suspended_session_list, sbi_sess);
 
-    /* TODO:
-     * delete request */
-
     ogs_assert(sbi_sess->timer);
     ogs_timer_delete(sbi_sess->timer);
+
+    ogs_list_for_each_safe(&sbi_sess->stream_list, next_request, request) {
+        ogs_list_remove(&sbi_sess->stream_list, request);
+        ogs_sbi_request_free(request);
+    }
 
     poll = ogs_pollset_cycle(ogs_app()->pollset, sbi_sess->poll.read);
     ogs_assert(poll);
@@ -280,6 +283,9 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
 {
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sockaddr_t *addr = NULL;
+
     ogs_sbi_session_t *sbi_sess = data;
     ogs_pkbuf_t *pkbuf = NULL;
     ssize_t readlen;
@@ -287,6 +293,8 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
 
     ogs_assert(sbi_sess);
     ogs_assert(fd != INVALID_SOCKET);
+    addr = sbi_sess->addr;
+    ogs_assert(addr);
 
     pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
     ogs_assert(pkbuf);
@@ -304,11 +312,15 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
             session_remove(sbi_sess);
         }
     } else {
+        ogs_sockaddr_t *addr = sbi_sess->addr;
+
+        ogs_assert(addr);
         if (n < 0)
-            ogs_log_message(OGS_LOG_ERROR,
-                    ogs_socket_errno, "lost connection");
+            ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                "lost connection [%s]:%d", OGS_ADDR(addr, buf), OGS_PORT(addr));
         else if (n == 0)
-            ogs_error("connection closed");
+            ogs_error("connection closed [%s]:%d",
+                    OGS_ADDR(addr, buf), OGS_PORT(addr));
 
         session_remove(sbi_sess);
     }
@@ -389,6 +401,8 @@ static int on_begin_headers_callback(nghttp2_session *session,
     request = ogs_sbi_request_new();
     ogs_assert(request);
 
+    ogs_list_add(&sbi_sess->stream_list, request);
+
     nghttp2_session_set_stream_user_data(
             session, frame->hd.stream_id, request);
 
@@ -428,7 +442,9 @@ static int on_header_callback(nghttp2_session *session,
 static int on_frame_recv_callback(nghttp2_session *session,
                                   const nghttp2_frame *frame, void *user_data)
 {
+#if 0
     ogs_sbi_session_t *sbi_sess = user_data;
+#endif
     ogs_sbi_request_t *request = NULL;
 
     switch (frame->hd.type) {
@@ -468,6 +484,7 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
         return 0;
     }
 
+    ogs_list_remove(&sbi_sess->stream_list, request);
     ogs_sbi_request_free(request);
 
     return 0;
