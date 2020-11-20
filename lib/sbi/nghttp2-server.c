@@ -24,6 +24,52 @@
 #include <netinet/tcp.h>
 #include <nghttp2/nghttp2.h>
 
+static char status_string[600][4] = {
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "100", "101", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "200", "201", "202", "203", "204", "205", "206", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "300", "301", "302", "303", "304", "305", "306", "307", "308", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "400", "401", "402", "403", "404", "405", "406", "407", "408", "409",
+ "410", "411", "412", "413", "414", "415", "416", "417", "", "",
+ "", "421", "", "", "", "", "426", "", "428", "429", "", "431", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "451", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "500", "501", "502", "503", "504", "505", "", "", "", "", "", "511", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
+ "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""
+};
+
+typedef struct ogs_sbi_pseudo_header_s {
+    const char *name;
+    size_t len;
+} ogs_sbi_pseudo_header_t;
+
+static ogs_sbi_pseudo_header_t pseudo_headers[] = {
+    { .name = ":method",    .len = 7  },
+    { .name = ":scheme",    .len = 7  },
+    { .name = ":authority", .len = 10 },
+    { .name = ":path",      .len = 5  },
+};
+
 static void server_init(int num_of_session_pool);
 static void server_final(void);
 
@@ -334,15 +380,98 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     ogs_pkbuf_free(pkbuf);
 }
 
+static void add_header(nghttp2_nv *nv, const char *key, const char *value)
+{
+    nv->name = (uint8_t *)key;
+    nv->namelen = strlen (key);
+    nv->value = (uint8_t *)value;
+    nv->valuelen = strlen(value);
+    nv->flags = NGHTTP2_NV_FLAG_NONE;
+}
+
+static void get_date_string (char *date,
+		 size_t date_len,
+		 const char *header, const char *end_of_line)
+{
+  static const char *const days[] = {
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+  };
+  static const char *const mons[] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  };
+  struct tm now;
+  time_t t;
+#if !defined(HAVE_C11_GMTIME_S) && !defined(HAVE_W32_GMTIME_S) && !defined(HAVE_GMTIME_R)
+  struct tm* pNow;
+#endif
+
+  date[0] = 0;
+  time (&t);
+#if defined(HAVE_C11_GMTIME_S)
+  if (NULL == gmtime_s (&t,
+                        &now))
+    return;
+#elif defined(HAVE_W32_GMTIME_S)
+  if (0 != gmtime_s (&now,
+                     &t))
+    return;
+#elif defined(HAVE_GMTIME_R)
+  if (NULL == gmtime_r(&t,
+                       &now))
+    return;
+#else
+  pNow = gmtime(&t);
+  if (NULL == pNow)
+    return;
+  now = *pNow;
+#endif
+  ogs_snprintf (date,
+		 date_len,
+		 "%s%3s, %02u %3s %04u %02u:%02u:%02u GMT%s",
+		 header,
+		 days[now.tm_wday % 7],
+		 (unsigned int) now.tm_mday,
+		 mons[now.tm_mon % 12],
+		 (unsigned int) (1900 + now.tm_year),
+		 (unsigned int) now.tm_hour,
+		 (unsigned int) now.tm_min,
+		 (unsigned int) now.tm_sec,
+		 end_of_line);
+}
+
 static void server_send_response(
         ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
     ogs_hash_index_t *hi;
+    nghttp2_nv *nva;
+    size_t nvlen;
+    int i;
+    char date[128];
 
     ogs_assert(sbi_sess);
     ogs_assert(response);
 
+    nvlen = 2; /* :status && date */
+    for (hi = ogs_hash_first(response->http.headers);
+            hi; hi = ogs_hash_next(hi))
+        nvlen++;
+
 #if 0
+    if (response->http.content && response->http.content_length)
+        nvlen++;
+
+    nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
+    ogs_assert(nva);
+
+    i = 0;
+
+    ogs_assert(response->status < 600);
+    add_header(&nva[i++], ":status", status_string[response->status]);
+
+    get_date_string(date, sizeof (date), "", "");
+    add_header(&nva[i++], "date", date);
+
     if (response->http.content) {
         ogs_fatal("content = %s", response->http.content);
     } else {
@@ -355,6 +484,9 @@ static void server_send_response(
         char *val = ogs_hash_this_val(hi);
         ogs_fatal("K,V = %s, %s", key, val);
     }
+
+	nghttp2_submit_response(sbi_sess->session,
+            stream->stream_id, nva, nvlen, NULL);
 #endif
 
     ogs_sbi_response_free(response);
