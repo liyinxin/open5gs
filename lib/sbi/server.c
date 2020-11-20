@@ -168,3 +168,8 @@ ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_stream_t *session)
 {
     return ogs_sbi_server_actions.from_session(session);
 }
+
+ogs_sbi_server_t *ogs_sbi_server_from_stream(ogs_sbi_stream_t *stream)
+{
+    return ogs_sbi_server_actions.from_session(stream);
+}

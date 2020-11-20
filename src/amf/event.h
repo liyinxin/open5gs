@@ -74,7 +74,7 @@ typedef struct amf_event_s {
     struct {
         /* OGS_EVT_SBI_SERVER */
         ogs_sbi_request_t *request;
-        ogs_sbi_stream_t *session;
+        ogs_sbi_stream_t *stream;
         ogs_sbi_server_t *server;
 
         /* OGS_EVT_SBI_CLIENT */

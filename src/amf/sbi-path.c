@@ -23,19 +23,19 @@
 #include "nudm-build.h"
 
 static int server_cb(ogs_sbi_server_t *server,
-        ogs_sbi_stream_t *session, ogs_sbi_request_t *request)
+        ogs_sbi_stream_t *stream, ogs_sbi_request_t *request)
 {
     amf_event_t *e = NULL;
     int rv;
 
-    ogs_assert(session);
+    ogs_assert(stream);
     ogs_assert(request);
 
     e = amf_event_new(AMF_EVT_SBI_SERVER);
     ogs_assert(e);
 
     e->sbi.server = server;
-    e->sbi.session = session;
+    e->sbi.stream = stream;
     e->sbi.request = request;
 
     rv = ogs_queue_push(ogs_app()->queue, e);
