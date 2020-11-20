@@ -492,7 +492,8 @@ static int on_header_callback2(nghttp2_session *session,
         }
 
         if (j >= MAX_NUM_OF_PARAM_IN_QUERY+1) {
-            ogs_fatal("The number(16) of query param is not enough");
+            ogs_fatal("Maximum number(%d) of query params reached",
+                    MAX_NUM_OF_PARAM_IN_QUERY);
             ogs_assert_if_reached();
         }
 
