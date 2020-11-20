@@ -337,8 +337,25 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
 static void server_send_response(
         ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
+    ogs_hash_index_t *hi;
+
     ogs_assert(sbi_sess);
     ogs_assert(response);
+
+#if 0
+    if (response->http.content) {
+        ogs_fatal("content = %s", response->http.content);
+    } else {
+        ogs_fatal("no content");
+    }
+
+    for (hi = ogs_hash_first(response->http.headers);
+            hi; hi = ogs_hash_next(hi)) {
+        const char *key = ogs_hash_this_key(hi);
+        char *val = ogs_hash_this_val(hi);
+        ogs_fatal("K,V = %s, %s", key, val);
+    }
+#endif
 
     ogs_sbi_response_free(response);
 }
