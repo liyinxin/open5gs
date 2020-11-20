@@ -32,7 +32,7 @@ static int server_cb(ogs_sbi_server_t *server,
     ogs_assert(e);
 
     e->sbi.server = server;
-    e->sbi.session = stream;
+    e->sbi.stream = stream;
     e->sbi.request = request;
 
     rv = ogs_queue_push(ogs_app()->queue, e);
