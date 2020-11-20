@@ -24,6 +24,7 @@
 #include <netinet/tcp.h>
 #include <nghttp2/nghttp2.h>
 
+#if 0
 static char status_string[600][4] = {
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
@@ -69,6 +70,7 @@ static ogs_sbi_pseudo_header_t pseudo_headers[] = {
     { .name = ":authority", .len = 10 },
     { .name = ":path",      .len = 5  },
 };
+#endif
 
 static void server_init(int num_of_session_pool);
 static void server_final(void);
@@ -380,6 +382,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     ogs_pkbuf_free(pkbuf);
 }
 
+#if 0
 static void add_header(nghttp2_nv *nv, const char *key, const char *value)
 {
     nv->name = (uint8_t *)key;
@@ -439,10 +442,12 @@ static void get_date_string (char *date,
 		 (unsigned int) now.tm_sec,
 		 end_of_line);
 }
+#endif
 
 static void server_send_response(
         ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
+#if 0
     ogs_hash_index_t *hi;
     nghttp2_nv *nva;
     size_t nvlen;
@@ -457,7 +462,6 @@ static void server_send_response(
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
-#if 0
     if (response->http.content && response->http.content_length)
         nvlen++;
 
