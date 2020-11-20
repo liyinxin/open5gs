@@ -426,6 +426,11 @@ static int on_header_callback2(nghttp2_session *session,
 
     const char PATH[] = ":path";
     const char METHOD[] = ":method";
+    const char ACCEPT[] = "accept";
+    const char ACCEPT_ENCODING[] = "accept-encoding";
+    const char CONTENT_TYPE[] = "content-type";
+    const char CONTENT_LENGTH[] = "content-length";
+    const char LOCATION[] = "location";
 
     nghttp2_vec namebuf, valuebuf;
     char *namestr = NULL, *valuestr = NULL;
@@ -503,6 +508,36 @@ static int on_header_callback2(nghttp2_session *session,
             memcmp(METHOD, namebuf.base, namebuf.len) == 0) {
 
         request->h.method = valuestr;
+
+    } else if (namebuf.len == sizeof(ACCEPT) - 1 &&
+            memcmp(ACCEPT, namebuf.base, namebuf.len) == 0) {
+
+        ogs_sbi_header_set(request->http.headers, OGS_SBI_ACCEPT, valuestr);
+
+    } else if (namebuf.len == sizeof(ACCEPT_ENCODING) - 1 &&
+            memcmp(ACCEPT_ENCODING, namebuf.base, namebuf.len) == 0) {
+
+        ogs_sbi_header_set(request->http.headers,
+                OGS_SBI_ACCEPT_ENCODING, valuestr);
+
+    } else if (namebuf.len == sizeof(CONTENT_TYPE) - 1 &&
+            memcmp(CONTENT_TYPE, namebuf.base, namebuf.len) == 0) {
+
+        ogs_sbi_header_set(request->http.headers,
+                OGS_SBI_CONTENT_TYPE, valuestr);
+
+    } else if (namebuf.len == sizeof(LOCATION) - 1 &&
+            memcmp(LOCATION, namebuf.base, namebuf.len) == 0) {
+
+        ogs_sbi_header_set(request->http.headers, OGS_SBI_LOCATION, valuestr);
+
+    } else if (namebuf.len == sizeof(CONTENT_LENGTH) - 1 &&
+            memcmp(CONTENT_LENGTH, namebuf.base, namebuf.len) == 0) {
+
+        request->http.content_length = atoi(valuestr);
+        request->http.content =
+            (char*)ogs_malloc(request->http.content_length + 1);
+        ogs_assert(request->http.content);
 
     } else {
 
