@@ -39,15 +39,13 @@ typedef struct ogs_sbi_server_s {
     } tls;
 
     int (*cb)(ogs_sbi_request_t *request, void *data);
+    ogs_list_t      session_list;
 
-    ogs_list_t      suspended_session_list; /* MHD suspended list */
-
-    void            *mhd;                   /* MHD instance */
-
+    void            *mhd; /* Used by MHD */
 } ogs_sbi_server_t;
 
 typedef struct ogs_sbi_server_actions_s {
-    void (*init)(int num_of_connection_pool);
+    void (*init)(int num_of_stream_pool);
     void (*cleanup)(void);
 
     void (*start)(ogs_sbi_server_t *server,
@@ -55,9 +53,9 @@ typedef struct ogs_sbi_server_actions_s {
     void (*stop)(ogs_sbi_server_t *server);
 
     void (*send_response)(
-            ogs_sbi_stream_t *session, ogs_sbi_response_t *response);
+            ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
 
-    ogs_sbi_server_t *(*from_session)(void *session);
+    ogs_sbi_server_t *(*from_stream)(void *stream);
 } ogs_sbi_server_actions_t;
 
 void ogs_sbi_server_init(int num_of_connection_pool);
@@ -72,14 +70,13 @@ void ogs_sbi_server_start_all(
 void ogs_sbi_server_stop_all(void);
 
 void ogs_sbi_server_send_response(
-        ogs_sbi_stream_t *session, ogs_sbi_response_t *response);
-void ogs_sbi_server_send_error(ogs_sbi_stream_t *session,
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
+void ogs_sbi_server_send_error(ogs_sbi_stream_t *stream,
         int status, ogs_sbi_message_t *message,
         const char *title, const char *detail);
 void ogs_sbi_server_send_problem(
-        ogs_sbi_stream_t *session, OpenAPI_problem_details_t *problem);
+        ogs_sbi_stream_t *stream, OpenAPI_problem_details_t *problem);
 
-ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_stream_t *session);
 ogs_sbi_server_t *ogs_sbi_server_from_stream(ogs_sbi_stream_t *stream);
 
 #ifdef __cplusplus

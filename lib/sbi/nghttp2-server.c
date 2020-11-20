@@ -72,7 +72,7 @@ static ogs_sbi_pseudo_header_t pseudo_headers[] = {
 };
 #endif
 
-static void server_init(int num_of_session_pool);
+static void server_init(int num_of_stream_pool);
 static void server_final(void);
 
 static void server_start(ogs_sbi_server_t *server,
@@ -82,7 +82,7 @@ static void server_stop(ogs_sbi_server_t *server);
 static void server_send_response(
         ogs_sbi_stream_t *sbi_sess, ogs_sbi_response_t *response);
 
-static ogs_sbi_server_t *server_from_session(void *session);
+static ogs_sbi_server_t *server_from_stream(void *stream);
 
 const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
     server_init,
@@ -92,7 +92,7 @@ const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
     server_stop,
 
     server_send_response,
-    server_from_session,
+    server_from_stream,
 };
 
 static void accept_handler(short when, ogs_socket_t fd, void *data);
@@ -133,9 +133,9 @@ static void session_write_callback(short when, ogs_socket_t fd, void *data);
 
 static OGS_POOL(session_pool, ogs_sbi_stream_t);
 
-static void server_init(int num_of_session_pool)
+static void server_init(int num_of_stream_pool)
 {
-    ogs_pool_init(&session_pool, num_of_session_pool);
+    ogs_pool_init(&session_pool, num_of_stream_pool);
 }
 
 static void server_final(void)
@@ -169,7 +169,7 @@ static ogs_sbi_stream_t *session_add(
     ogs_timer_start(sbi_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
 
-    ogs_list_add(&server->suspended_session_list, sbi_sess);
+    ogs_list_add(&server->session_list, sbi_sess);
 
     return sbi_sess;
 }
@@ -185,7 +185,7 @@ static void session_remove(ogs_sbi_stream_t *sbi_sess)
     server = sbi_sess->server;
     ogs_assert(server);
 
-    ogs_list_remove(&server->suspended_session_list, sbi_sess);
+    ogs_list_remove(&server->session_list, sbi_sess);
 
     ogs_assert(sbi_sess->timer);
     ogs_timer_delete(sbi_sess->timer);
@@ -232,8 +232,7 @@ static void session_remove_all(ogs_sbi_server_t *server)
 
     ogs_assert(server);
 
-    ogs_list_for_each_safe(
-            &server->suspended_session_list, next_sbi_sess, sbi_sess)
+    ogs_list_for_each_safe(&server->session_list, next_sbi_sess, sbi_sess)
         session_remove(sbi_sess);
 }
 
@@ -494,9 +493,9 @@ static void server_send_response(
     ogs_sbi_response_free(response);
 }
 
-static ogs_sbi_server_t *server_from_session(void *session)
+static ogs_sbi_server_t *server_from_stream(void *stream)
 {
-    ogs_sbi_stream_t *sbi_sess = session;
+    ogs_sbi_stream_t *sbi_sess = stream;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->server);

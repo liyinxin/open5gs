@@ -28,14 +28,14 @@ bool ogs_sbi_server_actions_initialized = false;
 
 static OGS_POOL(server_pool, ogs_sbi_server_t);
 
-void ogs_sbi_server_init(int num_of_session_pool)
+void ogs_sbi_server_init(int num_of_stream_pool)
 {
     if (ogs_sbi_server_actions_initialized == false) {
         ogs_sbi_server_actions = ogs_nghttp2_server_actions;
     }
         ogs_sbi_server_actions = ogs_mhd_server_actions;
 
-    ogs_sbi_server_actions.init(num_of_session_pool);
+    ogs_sbi_server_actions.init(num_of_stream_pool);
 
     ogs_list_init(&ogs_sbi_self()->server_list);
     ogs_pool_init(&server_pool, ogs_app()->pool.nf);
@@ -105,18 +105,18 @@ void ogs_sbi_server_stop_all(void)
 }
 
 void ogs_sbi_server_send_response(
-        ogs_sbi_stream_t *session, ogs_sbi_response_t *response)
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
-    ogs_sbi_server_actions.send_response(session, response);
+    ogs_sbi_server_actions.send_response(stream, response);
 }
 
 void ogs_sbi_server_send_problem(
-        ogs_sbi_stream_t *session, OpenAPI_problem_details_t *problem)
+        ogs_sbi_stream_t *stream, OpenAPI_problem_details_t *problem)
 {
     ogs_sbi_message_t message;
     ogs_sbi_response_t *response = NULL;
 
-    ogs_assert(session);
+    ogs_assert(stream);
     ogs_assert(problem);
 
     memset(&message, 0, sizeof(message));
@@ -127,16 +127,16 @@ void ogs_sbi_server_send_problem(
     response = ogs_sbi_build_response(&message, problem->status);
     ogs_assert(response);
 
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 }
 
-void ogs_sbi_server_send_error(ogs_sbi_stream_t *session,
+void ogs_sbi_server_send_error(ogs_sbi_stream_t *stream,
         int status, ogs_sbi_message_t *message,
         const char *title, const char *detail)
 {
     OpenAPI_problem_details_t problem;
 
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&problem, 0, sizeof(problem));
 
@@ -155,7 +155,7 @@ void ogs_sbi_server_send_error(ogs_sbi_stream_t *session,
     problem.title = (char*)title;
     problem.detail = (char*)detail;
 
-    ogs_sbi_server_send_problem(session, &problem);
+    ogs_sbi_server_send_problem(stream, &problem);
 
     if (problem.type)
         ogs_free(problem.type);
@@ -163,12 +163,7 @@ void ogs_sbi_server_send_error(ogs_sbi_stream_t *session,
         ogs_free(problem.instance);
 }
 
-ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_stream_t *session)
-{
-    return ogs_sbi_server_actions.from_session(session);
-}
-
 ogs_sbi_server_t *ogs_sbi_server_from_stream(ogs_sbi_stream_t *stream)
 {
-    return ogs_sbi_server_actions.from_session(stream);
+    return ogs_sbi_server_actions.from_stream(stream);
 }

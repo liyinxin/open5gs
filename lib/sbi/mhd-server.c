@@ -139,7 +139,7 @@ static ogs_sbi_stream_t *session_add(ogs_sbi_server_t *server,
     ogs_timer_start(sbi_sess->timer,
             ogs_app()->time.message.sbi.connection_deadline);
 
-    ogs_list_add(&server->suspended_session_list, sbi_sess);
+    ogs_list_add(&server->session_list, sbi_sess);
 
     return sbi_sess;
 }
@@ -153,7 +153,7 @@ static void session_remove(ogs_sbi_stream_t *sbi_sess)
     server = sbi_sess->server;
     ogs_assert(server);
 
-    ogs_list_remove(&server->suspended_session_list, sbi_sess);
+    ogs_list_remove(&server->session_list, sbi_sess);
 
     ogs_assert(sbi_sess->timer);
     ogs_timer_delete(sbi_sess->timer);
@@ -187,8 +187,7 @@ static void session_remove_all(ogs_sbi_server_t *server)
 
     ogs_assert(server);
 
-    ogs_list_for_each_safe(
-            &server->suspended_session_list, next_sbi_sess, sbi_sess)
+    ogs_list_for_each_safe(&server->session_list, next_sbi_sess, sbi_sess)
         session_remove(sbi_sess);
 }
 
