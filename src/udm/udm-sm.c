@@ -70,7 +70,7 @@ void udm_state_operational(ogs_fsm_t *s, udm_event_t *e)
     case UDM_EVT_SBI_SERVER:
         request = e->sbi.request;
         ogs_assert(request);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         rv = ogs_sbi_parse_request(&message, request);
@@ -313,7 +313,7 @@ void udm_state_operational(ogs_fsm_t *s, udm_event_t *e)
 
                 e->udm_ue = udm_ue;
                 e->sbi.message = &message;
-                e->sbi.stream = sbi_xact->assoc_stream;
+                e->sbi.data = sbi_xact->assoc_stream;
 
                 ogs_sbi_xact_remove(sbi_xact);
 

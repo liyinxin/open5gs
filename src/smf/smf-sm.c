@@ -259,7 +259,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
     case SMF_EVT_SBI_SERVER:
         sbi_request = e->sbi.request;
         ogs_assert(sbi_request);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         rv = ogs_sbi_parse_request(&sbi_message, sbi_request);
@@ -524,7 +524,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
             e->sess = sess;
             e->sbi.message = &sbi_message;
-            e->sbi.stream = sbi_xact->assoc_stream;
+            e->sbi.data = sbi_xact->assoc_stream;
 
             ogs_sbi_xact_remove(sbi_xact);
 
@@ -606,7 +606,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
     case SMF_EVT_5GSM_MESSAGE:
         sess = e->sess;
         ogs_assert(sess);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
         pkbuf = e->pkbuf;
         ogs_assert(pkbuf);
@@ -635,7 +635,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
     case SMF_EVT_NGAP_MESSAGE:
         sess = e->sess;
         ogs_assert(sess);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
         pkbuf = e->pkbuf;
         ogs_assert(pkbuf);

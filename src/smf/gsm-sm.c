@@ -67,7 +67,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
     case SMF_EVT_SBI_SERVER:
         sbi_message = e->sbi.message;
         ogs_assert(sbi_message);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(sbi_message->h.service.name)
@@ -102,7 +102,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
         smf_ue = sess->smf_ue;
         ogs_assert(smf_ue);
 
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(sbi_message->h.service.name)
@@ -166,7 +166,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
         ogs_assert(nas_message);
         sess = e->sess;
         ogs_assert(sess);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
         smf_ue = sess->smf_ue;
         ogs_assert(smf_ue);
@@ -223,7 +223,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
     case SMF_EVT_NGAP_MESSAGE:
         sess = e->sess;
         ogs_assert(sess);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
         smf_ue = sess->smf_ue;
         ogs_assert(smf_ue);

@@ -33,8 +33,6 @@ typedef struct ogs_pfcp_xact_s ogs_pfcp_xact_t;
 typedef struct ogs_pfcp_message_s ogs_pfcp_message_t;
 typedef struct smf_sess_s smf_sess_t;
 typedef struct smf_upf_s smf_upf_t;
-typedef struct ogs_sbi_server_s ogs_sbi_server_t;
-typedef struct ogs_sbi_stream_s ogs_sbi_stream_t;
 typedef struct ogs_sbi_request_s ogs_sbi_request_t;
 typedef struct ogs_sbi_response_s ogs_sbi_response_t;
 typedef struct ogs_sbi_message_s ogs_sbi_message_t;
@@ -80,12 +78,7 @@ typedef struct smf_event_s {
     ogs_pfcp_message_t *pfcp_message;
 
     struct {
-        /* OGS_EVT_SBI_SERVER */
         ogs_sbi_request_t *request;
-        ogs_sbi_stream_t *stream;
-        ogs_sbi_server_t *server;
-
-        /* OGS_EVT_SBI_CLIENT */
         ogs_sbi_response_t *response;
         void *data;
 

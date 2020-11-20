@@ -69,7 +69,7 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
     case AUSF_EVT_SBI_SERVER:
         request = e->sbi.request;
         ogs_assert(request);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         rv = ogs_sbi_parse_request(&message, request);
@@ -285,7 +285,7 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
 
             e->ausf_ue = ausf_ue;
             e->sbi.message = &message;
-            e->sbi.stream = sbi_xact->assoc_stream;
+            e->sbi.data = sbi_xact->assoc_stream;
 
             ogs_sbi_xact_remove(sbi_xact);
 

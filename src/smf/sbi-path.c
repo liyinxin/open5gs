@@ -33,9 +33,8 @@ static int server_cb(ogs_sbi_server_t *server,
     e = smf_event_new(SMF_EVT_SBI_SERVER);
     ogs_assert(e);
 
-    e->sbi.server = server;
-    e->sbi.stream = stream;
     e->sbi.request = request;
+    e->sbi.data = stream;
 
     rv = ogs_queue_push(ogs_app()->queue, e);
     if (rv != OGS_OK) {

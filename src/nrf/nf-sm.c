@@ -107,7 +107,7 @@ void nrf_nf_state_will_register(ogs_fsm_t *s, nrf_event_t *e)
     case NRF_EVT_SBI_SERVER:
         message = e->sbi.message;
         ogs_assert(message);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(message->h.service.name)
@@ -210,7 +210,7 @@ void nrf_nf_state_registered(ogs_fsm_t *s, nrf_event_t *e)
     case NRF_EVT_SBI_SERVER:
         message = e->sbi.message;
         ogs_assert(message);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(message->h.service.name)

@@ -55,7 +55,6 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
     bool handled;
     ausf_ue_t *ausf_ue = NULL;
 
-    ogs_sbi_server_t *server = NULL;
     ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_message_t *message = NULL;
 
@@ -77,10 +76,8 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
     case AUSF_EVT_SBI_SERVER:
         message = e->sbi.message;
         ogs_assert(message);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
-        server = e->sbi.server;
-        ogs_assert(server);
 
         SWITCH(message->h.method)
         CASE(OGS_SBI_HTTP_METHOD_POST)
@@ -117,7 +114,7 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
 
         ausf_ue = e->ausf_ue;
         ogs_assert(ausf_ue);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(message->h.service.name)

@@ -59,7 +59,7 @@ void udm_ue_state_operational(ogs_fsm_t *s, udm_event_t *e)
     case UDM_EVT_SBI_SERVER:
         message = e->sbi.message;
         ogs_assert(message);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(message->h.service.name)
@@ -165,7 +165,7 @@ void udm_ue_state_operational(ogs_fsm_t *s, udm_event_t *e)
 
         udm_ue = e->udm_ue;
         ogs_assert(udm_ue);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         SWITCH(message->h.service.name)

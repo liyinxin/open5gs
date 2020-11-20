@@ -100,7 +100,7 @@ void amf_state_operational(ogs_fsm_t *s, amf_event_t *e)
     case AMF_EVT_SBI_SERVER:
         sbi_request = e->sbi.request;
         ogs_assert(sbi_request);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         rv = ogs_sbi_parse_request(&sbi_message, sbi_request);

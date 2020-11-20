@@ -69,7 +69,7 @@ void udr_state_operational(ogs_fsm_t *s, udr_event_t *e)
     case UDR_EVT_SBI_SERVER:
         request = e->sbi.request;
         ogs_assert(request);
-        stream = e->sbi.stream;
+        stream = e->sbi.data;
         ogs_assert(stream);
 
         rv = ogs_sbi_parse_request(&message, request);

@@ -31,7 +31,7 @@ void ngap_send_to_n2sm(smf_sess_t *sess,
     e = smf_event_new(SMF_EVT_NGAP_MESSAGE);
     ogs_assert(e);
     e->sess = sess;
-    e->sbi.stream = stream;
+    e->sbi.data = stream;
     e->pkbuf = pkbuf;
     e->ngap.type = type;
     rv = ogs_queue_push(ogs_app()->queue, e);

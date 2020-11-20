@@ -26,8 +26,6 @@
 extern "C" {
 #endif
 
-typedef struct ogs_sbi_server_s ogs_sbi_server_t;
-typedef struct ogs_sbi_stream_s ogs_sbi_stream_t;
 typedef struct ogs_sbi_request_s ogs_sbi_request_t;
 typedef struct ogs_sbi_response_s ogs_sbi_response_t;
 typedef struct ogs_sbi_message_s ogs_sbi_message_t;
@@ -52,12 +50,7 @@ typedef struct udm_event_s {
     int timer_id;
 
     struct {
-        /* OGS_EVT_SBI_SERVER */
         ogs_sbi_request_t *request;
-        ogs_sbi_stream_t *stream;
-        ogs_sbi_server_t *server;
-
-        /* OGS_EVT_SBI_CLIENT */
         ogs_sbi_response_t *response;
         void *data;
 
