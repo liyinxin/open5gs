@@ -349,17 +349,21 @@ static ogs_sbi_server_t *server_from_session(void *session)
     return sbi_sess->server;
 }
 
-static int on_begin_headers_callback(nghttp2_session *session,
-                                     const nghttp2_frame *frame,
-                                     void *user_data);
+static int on_frame_recv_callback(nghttp2_session *session,
+                                  const nghttp2_frame *frame, void *user_data);
+
+static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
+                                    uint32_t error_code, void *user_data);
+
 static int on_header_callback2(nghttp2_session *session,
                                const nghttp2_frame *frame,
                                nghttp2_rcbuf *name, nghttp2_rcbuf *value,
                                uint8_t flags, void *user_data);
-static int on_frame_recv_callback(nghttp2_session *session,
-                                  const nghttp2_frame *frame, void *user_data);
-static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
-                                    uint32_t error_code, void *user_data);
+
+static int on_begin_headers_callback(nghttp2_session *session,
+                                     const nghttp2_frame *frame,
+                                     void *user_data);
+
 static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
                              size_t length, int flags, void *user_data);
 
@@ -371,14 +375,17 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
 
     nghttp2_session_callbacks_new(&callbacks);
 
-    nghttp2_session_callbacks_set_on_begin_headers_callback(
-            callbacks, on_begin_headers_callback);
-    nghttp2_session_callbacks_set_on_header_callback2(
-            callbacks, on_header_callback2);
     nghttp2_session_callbacks_set_on_frame_recv_callback(
             callbacks, on_frame_recv_callback);
+
     nghttp2_session_callbacks_set_on_stream_close_callback(
             callbacks, on_stream_close_callback);
+
+    nghttp2_session_callbacks_set_on_header_callback2(
+            callbacks, on_header_callback2);
+
+    nghttp2_session_callbacks_set_on_begin_headers_callback(
+            callbacks, on_begin_headers_callback);
 
     nghttp2_session_callbacks_set_send_callback(
             callbacks, send_callback);
@@ -388,30 +395,53 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
     nghttp2_session_callbacks_del(callbacks);
 }
 
-static int on_begin_headers_callback(nghttp2_session *session,
-                                     const nghttp2_frame *frame,
-                                     void *user_data)
+static int on_frame_recv_callback(nghttp2_session *session,
+                                  const nghttp2_frame *frame, void *user_data)
+{
+#if 0
+    ogs_sbi_session_t *sbi_sess = user_data;
+#endif
+    ogs_sbi_request_t *request = NULL;
+
+    switch (frame->hd.type) {
+    case NGHTTP2_DATA:
+    case NGHTTP2_HEADERS:
+        /* Check that the client request has finished */
+        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+            request = nghttp2_session_get_stream_user_data(
+                            session, frame->hd.stream_id);
+
+            /* For DATA and HEADERS frame, this callback may be called after
+            on_stream_close_callback. Check that stream still alive. */
+            if (!request) {
+                return 0;
+            }
+
+            break;
+        }
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+
+static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
+                                    uint32_t error_code, void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
-    ogs_assert(sbi_sess);
-    ogs_assert(session);
-    ogs_assert(frame);
+    (void)error_code;
 
-    if (frame->hd.type != NGHTTP2_HEADERS ||
-        frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+    request = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (!request) {
         return 0;
     }
 
-    request = ogs_sbi_request_new();
-    ogs_assert(request);
-    request->stream_id = frame->hd.stream_id;
-
-    ogs_list_add(&sbi_sess->stream_list, request);
-
-    nghttp2_session_set_stream_user_data(
-            session, frame->hd.stream_id, request);
+    ogs_list_remove(&sbi_sess->stream_list, request);
+    ogs_sbi_request_free(request);
 
     return 0;
 }
@@ -569,53 +599,30 @@ cleanup:
     return 0;
 }
 
-static int on_frame_recv_callback(nghttp2_session *session,
-                                  const nghttp2_frame *frame, void *user_data)
-{
-#if 0
-    ogs_sbi_session_t *sbi_sess = user_data;
-#endif
-    ogs_sbi_request_t *request = NULL;
-
-    switch (frame->hd.type) {
-    case NGHTTP2_DATA:
-    case NGHTTP2_HEADERS:
-        /* Check that the client request has finished */
-        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-            request = nghttp2_session_get_stream_user_data(
-                            session, frame->hd.stream_id);
-
-            /* For DATA and HEADERS frame, this callback may be called after
-            on_stream_close_callback. Check that stream still alive. */
-            if (!request) {
-                return 0;
-            }
-
-            break;
-        }
-    default:
-        break;
-    }
-
-    return 0;
-}
-
-
-static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
-                                    uint32_t error_code, void *user_data)
+static int on_begin_headers_callback(nghttp2_session *session,
+                                     const nghttp2_frame *frame,
+                                     void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
-    (void)error_code;
+    ogs_assert(sbi_sess);
+    ogs_assert(session);
+    ogs_assert(frame);
 
-    request = nghttp2_session_get_stream_user_data(session, stream_id);
-    if (!request) {
+    if (frame->hd.type != NGHTTP2_HEADERS ||
+        frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
         return 0;
     }
 
-    ogs_list_remove(&sbi_sess->stream_list, request);
-    ogs_sbi_request_free(request);
+    request = ogs_sbi_request_new();
+    ogs_assert(request);
+    request->stream_id = frame->hd.stream_id;
+
+    ogs_list_add(&sbi_sess->stream_list, request);
+
+    nghttp2_session_set_stream_user_data(
+            session, frame->hd.stream_id, request);
 
     return 0;
 }
