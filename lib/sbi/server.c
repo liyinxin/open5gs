@@ -87,9 +87,8 @@ void ogs_sbi_server_remove_all(void)
         ogs_sbi_server_remove(server);
 }
 
-void ogs_sbi_server_start_all(int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
-            ogs_sbi_request_t *request))
+void ogs_sbi_server_start_all(
+        int (*cb)(ogs_sbi_request_t *request, void *data))
 {
     ogs_sbi_server_t *server = NULL, *next_server = NULL;
 

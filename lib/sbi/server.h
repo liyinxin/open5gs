@@ -38,9 +38,7 @@ typedef struct ogs_sbi_server_s {
         const char  *pem;
     } tls;
 
-    int (*cb)(ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
-            ogs_sbi_request_t *request);
-    void *data;
+    int (*cb)(ogs_sbi_request_t *request, void *data);
 
     ogs_list_t      suspended_session_list; /* MHD suspended list */
 
@@ -52,9 +50,8 @@ typedef struct ogs_sbi_server_actions_s {
     void (*init)(int num_of_connection_pool);
     void (*cleanup)(void);
 
-    void (*start)(ogs_sbi_server_t *server, int (*cb)(
-                ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
-                ogs_sbi_request_t *request));
+    void (*start)(ogs_sbi_server_t *server,
+            int (*cb)(ogs_sbi_request_t *request, void *data));
     void (*stop)(ogs_sbi_server_t *server);
 
     void (*send_response)(
@@ -70,9 +67,8 @@ ogs_sbi_server_t *ogs_sbi_server_add(ogs_sockaddr_t *addr);
 void ogs_sbi_server_remove(ogs_sbi_server_t *server);
 void ogs_sbi_server_remove_all(void);
 
-void ogs_sbi_server_start_all(int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
-            ogs_sbi_request_t *request));
+void ogs_sbi_server_start_all(
+        int (*cb)(ogs_sbi_request_t *request, void *data));
 void ogs_sbi_server_stop_all(void);
 
 void ogs_sbi_server_send_response(

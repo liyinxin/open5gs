@@ -21,20 +21,19 @@
 #include "ngap-path.h"
 #include "sbi-path.h"
 
-static int server_cb(ogs_sbi_server_t *server,
-        ogs_sbi_stream_t *stream, ogs_sbi_request_t *request)
+static int server_cb(ogs_sbi_request_t *request, void *data)
 {
     smf_event_t *e = NULL;
     int rv;
 
-    ogs_assert(stream);
     ogs_assert(request);
+    ogs_assert(data);
 
     e = smf_event_new(SMF_EVT_SBI_SERVER);
     ogs_assert(e);
 
     e->sbi.request = request;
-    e->sbi.data = stream;
+    e->sbi.data = data;
 
     rv = ogs_queue_push(ogs_app()->queue, e);
     if (rv != OGS_OK) {

@@ -31,9 +31,8 @@ typedef int _MHD_Result;
 static void server_init(int num_of_session_pool);
 static void server_final(void);
 
-static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_stream_t *sbi_sess,
-            ogs_sbi_request_t *request));
+static void server_start(ogs_sbi_server_t *server,
+        int (*cb)(ogs_sbi_request_t *request, void *data));
 static void server_stop(ogs_sbi_server_t *server);
 
 static void server_send_response(
@@ -193,9 +192,8 @@ static void session_remove_all(ogs_sbi_server_t *server)
         session_remove(sbi_sess);
 }
 
-static void server_start(ogs_sbi_server_t *server, int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_stream_t *sbi_sess,
-            ogs_sbi_request_t *request))
+static void server_start(ogs_sbi_server_t *server,
+        int (*cb)(ogs_sbi_request_t *request, void *data))
 {
     char buf[OGS_ADDRSTRLEN];
     ogs_sockaddr_t *addr = NULL;
@@ -511,7 +509,7 @@ suspend:
     ogs_assert(sbi_sess);
 
     if (server->cb) {
-        if (server->cb(server, sbi_sess, request) != OGS_OK) {
+        if (server->cb(request, sbi_sess) != OGS_OK) {
             ogs_warn("server callback error");
             ogs_sbi_server_send_error(sbi_sess,
                     OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
