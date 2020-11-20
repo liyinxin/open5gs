@@ -221,7 +221,7 @@ void ausf_nnrf_handle_nf_discover(
     ogs_assert(xact);
     sbi_object = xact->sbi_object;
     ogs_assert(sbi_object);
-    session = xact->assoc_session;
+    session = xact->assoc_stream;
     ogs_assert(session);
     ogs_assert(message);
 

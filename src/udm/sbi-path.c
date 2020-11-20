@@ -144,7 +144,7 @@ void udm_sbi_discover_and_send(OpenAPI_nf_type_e target_nf_type,
             (ogs_sbi_build_f)build, udm_timer_sbi_client_wait_expire);
     ogs_assert(xact);
 
-    xact->assoc_session = session;
+    xact->assoc_stream = session;
 
     if (ogs_sbi_discover_and_send(xact,
             (ogs_fsm_handler_t)udm_nf_state_registered, client_cb) != true) {

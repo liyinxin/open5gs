@@ -22,19 +22,19 @@
 #include "sbi-path.h"
 
 static int server_cb(ogs_sbi_server_t *server,
-        ogs_sbi_stream_t *session, ogs_sbi_request_t *request)
+        ogs_sbi_stream_t *stream, ogs_sbi_request_t *request)
 {
     smf_event_t *e = NULL;
     int rv;
 
-    ogs_assert(session);
+    ogs_assert(stream);
     ogs_assert(request);
 
     e = smf_event_new(SMF_EVT_SBI_SERVER);
     ogs_assert(e);
 
     e->sbi.server = server;
-    e->sbi.session = session;
+    e->sbi.stream = stream;
     e->sbi.request = request;
 
     rv = ogs_queue_push(ogs_app()->queue, e);
@@ -122,7 +122,7 @@ void smf_sbi_send(ogs_sbi_nf_instance_t *nf_instance, ogs_sbi_xact_t *xact)
 }
 
 void smf_sbi_discover_and_send(OpenAPI_nf_type_e target_nf_type,
-        smf_sess_t *sess, ogs_sbi_stream_t *session, void *data,
+        smf_sess_t *sess, ogs_sbi_stream_t *stream, void *data,
         ogs_sbi_request_t *(*build)(smf_sess_t *sess, void *data))
 {
     ogs_sbi_xact_t *xact = NULL;
@@ -134,40 +134,40 @@ void smf_sbi_discover_and_send(OpenAPI_nf_type_e target_nf_type,
     smf_ue = sess->smf_ue;
     ogs_assert(smf_ue);
 
-    ogs_assert(session);
+    ogs_assert(stream);
     ogs_assert(build);
 
     xact = ogs_sbi_xact_add(target_nf_type, &sess->sbi, data,
             (ogs_sbi_build_f)build, smf_timer_sbi_client_wait_expire);
     ogs_assert(xact);
 
-    xact->assoc_session = session;
+    xact->assoc_stream = stream;
 
     if (ogs_sbi_discover_and_send(xact,
             (ogs_fsm_handler_t)smf_nf_state_registered, client_cb) != true) {
 
-        ogs_sbi_server_send_error(session,
+        ogs_sbi_server_send_error(stream,
                 OGS_SBI_HTTP_STATUS_GATEWAY_TIMEOUT, NULL,
                 "Cannot discover", smf_ue->supi);
     }
 }
 
-void smf_sbi_send_response(ogs_sbi_stream_t *session, int status)
+void smf_sbi_send_response(ogs_sbi_stream_t *stream, int status)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;
 
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&sendmsg, 0, sizeof(sendmsg));
 
     response = ogs_sbi_build_response(&sendmsg, status);
     ogs_assert(response);
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 }
 
 void smf_sbi_send_sm_context_create_error(
-        ogs_sbi_stream_t *session,
+        ogs_sbi_stream_t *stream,
         int status, const char *title, const char *detail,
         ogs_pkbuf_t *n1smbuf)
 {
@@ -178,7 +178,7 @@ void smf_sbi_send_sm_context_create_error(
     OpenAPI_problem_details_t problem;
     OpenAPI_ref_to_binary_data_t n1SmMsg;
 
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&problem, 0, sizeof(problem));
     problem.status = status;
@@ -203,14 +203,14 @@ void smf_sbi_send_sm_context_create_error(
     response = ogs_sbi_build_response(&sendmsg, problem.status);
     ogs_assert(response);
 
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 
     if (n1smbuf)
         ogs_pkbuf_free(n1smbuf);
 }
 
 void smf_sbi_send_sm_context_updated_data(smf_sess_t *sess,
-        ogs_sbi_stream_t *session, OpenAPI_up_cnx_state_e up_cnx_state)
+        ogs_sbi_stream_t *stream, OpenAPI_up_cnx_state_e up_cnx_state)
 {
     int status;
 
@@ -220,7 +220,7 @@ void smf_sbi_send_sm_context_updated_data(smf_sess_t *sess,
     OpenAPI_sm_context_updated_data_t SmContextUpdatedData;
 
     ogs_assert(sess);
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&sendmsg, 0, sizeof(sendmsg));
     
@@ -236,11 +236,11 @@ void smf_sbi_send_sm_context_updated_data(smf_sess_t *sess,
 
     response = ogs_sbi_build_response(&sendmsg, status);
     ogs_assert(response);
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 }
 
 void smf_sbi_send_sm_context_updated_data_in_session_deletion(
-        smf_sess_t *sess, ogs_sbi_stream_t *session)
+        smf_sess_t *sess, ogs_sbi_stream_t *stream)
 {
     int i;
 
@@ -252,7 +252,7 @@ void smf_sbi_send_sm_context_updated_data_in_session_deletion(
     OpenAPI_ref_to_binary_data_t n2SmInfo;
 
     ogs_assert(sess);
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&sendmsg, 0, sizeof(sendmsg));
 
@@ -296,14 +296,14 @@ void smf_sbi_send_sm_context_updated_data_in_session_deletion(
 
     response = ogs_sbi_build_response(&sendmsg, OGS_SBI_HTTP_STATUS_OK);
     ogs_assert(response);
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 
     for (i = 0; i < sendmsg.num_of_part; i++)
         ogs_pkbuf_free(sendmsg.part[i].pkbuf);
 }
 
 void smf_sbi_send_sm_context_update_error(
-        ogs_sbi_stream_t *session,
+        ogs_sbi_stream_t *stream,
         int status, const char *title, const char *detail,
         ogs_pkbuf_t *n1smbuf, ogs_pkbuf_t *n2smbuf)
 {
@@ -315,7 +315,7 @@ void smf_sbi_send_sm_context_update_error(
     OpenAPI_ref_to_binary_data_t n1SmMsg;
     OpenAPI_ref_to_binary_data_t n2SmInfo;
 
-    ogs_assert(session);
+    ogs_assert(stream);
 
     memset(&problem, 0, sizeof(problem));
     problem.status = status;
@@ -353,7 +353,7 @@ void smf_sbi_send_sm_context_update_error(
     response = ogs_sbi_build_response(&sendmsg, problem.status);
     ogs_assert(response);
 
-    ogs_sbi_server_send_response(session, response);
+    ogs_sbi_server_send_response(stream, response);
 
     if (n1smbuf)
         ogs_pkbuf_free(n1smbuf);

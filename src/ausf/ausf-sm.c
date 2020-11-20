@@ -285,7 +285,7 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
 
             e->ausf_ue = ausf_ue;
             e->sbi.message = &message;
-            e->sbi.session = sbi_xact->assoc_session;
+            e->sbi.session = sbi_xact->assoc_stream;
 
             ogs_sbi_xact_remove(sbi_xact);
 
@@ -338,7 +338,7 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
             sbi_xact = e->sbi.data;
             ogs_assert(sbi_xact);
 
-            session = sbi_xact->assoc_session;
+            session = sbi_xact->assoc_stream;
             ogs_assert(session);
 
             ogs_sbi_xact_remove(sbi_xact);
