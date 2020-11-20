@@ -337,6 +337,10 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
 static void server_send_response(
         ogs_sbi_session_t *sbi_sess, ogs_sbi_response_t *response)
 {
+    ogs_assert(sbi_sess);
+    ogs_assert(response);
+
+    ogs_sbi_response_free(response);
 }
 
 static ogs_sbi_server_t *server_from_session(void *session)
@@ -405,10 +409,14 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
 static int on_frame_recv_callback(nghttp2_session *session,
                                   const nghttp2_frame *frame, void *user_data)
 {
-#if 0
     ogs_sbi_session_t *sbi_sess = user_data;
-#endif
+
+    ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
+
+    ogs_assert(sbi_sess);
+    server = sbi_sess->server;
+    ogs_assert(server);
 
     switch (frame->hd.type) {
     case NGHTTP2_DATA:
@@ -422,6 +430,20 @@ static int on_frame_recv_callback(nghttp2_session *session,
             on_stream_close_callback. Check that stream still alive. */
             if (!request) {
                 return 0;
+            }
+
+            if (server->cb) {
+                if (server->cb(server, sbi_sess, request) != OGS_OK) {
+                    ogs_warn("server callback error");
+                    ogs_sbi_server_send_error(sbi_sess,
+                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
+                            "server callback error", NULL);
+
+                    return 0;
+                }
+            } else {
+                ogs_fatal("server callback is not registered");
+                ogs_assert_if_reached();
             }
 
             break;
