@@ -428,11 +428,12 @@ int ogs_sbi_parse_request(
 
     for (hi = ogs_hash_first(request->http.headers);
             hi; hi = ogs_hash_next(hi)) {
-        if (!strcmp(ogs_hash_this_key(hi), OGS_SBI_ACCEPT_ENCODING)) {
+        if (!ogs_strcasecmp(ogs_hash_this_key(hi), OGS_SBI_ACCEPT_ENCODING)) {
             message->http.content_encoding = ogs_hash_this_val(hi);
-        } else if (!strcmp(ogs_hash_this_key(hi), OGS_SBI_CONTENT_TYPE)) {
+        } else if (!ogs_strcasecmp(
+                    ogs_hash_this_key(hi), OGS_SBI_CONTENT_TYPE)) {
             message->http.content_type = ogs_hash_this_val(hi);
-        } else if (!strcmp(ogs_hash_this_key(hi), OGS_SBI_ACCEPT)) {
+        } else if (!ogs_strcasecmp(ogs_hash_this_key(hi), OGS_SBI_ACCEPT)) {
             message->http.accept = ogs_hash_this_val(hi);
         }
     }
@@ -462,9 +463,9 @@ int ogs_sbi_parse_response(
 
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi)) {
-        if (!strcmp(ogs_hash_this_key(hi), OGS_SBI_CONTENT_TYPE)) {
+        if (!ogs_strcasecmp(ogs_hash_this_key(hi), OGS_SBI_CONTENT_TYPE)) {
             message->http.content_type = ogs_hash_this_val(hi);
-        } else if (!strcmp(ogs_hash_this_key(hi), OGS_SBI_LOCATION)) {
+        } else if (!ogs_strcasecmp(ogs_hash_this_key(hi), OGS_SBI_LOCATION)) {
             message->http.location = ogs_hash_this_val(hi);
         }
     }
