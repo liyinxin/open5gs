@@ -79,9 +79,10 @@ static void server_start(ogs_sbi_server_t *server,
         int (*cb)(ogs_sbi_request_t *request, void *data));
 static void server_stop(ogs_sbi_server_t *server);
 
-static void server_send_response(ogs_sbi_response_t *response, void *data);
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
 
-static ogs_sbi_server_t *server_from_stream(void *data);
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *data);
 
 const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
     server_init,
@@ -440,7 +441,8 @@ static void get_date_string (char *date,
 }
 #endif
 
-static void server_send_response(ogs_sbi_response_t *response, void *data)
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
 #if 0
     ogs_hash_index_t *hi;
@@ -491,14 +493,12 @@ static void server_send_response(ogs_sbi_response_t *response, void *data)
     ogs_sbi_response_free(response);
 }
 
-static ogs_sbi_server_t *server_from_stream(void *data)
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
 {
-    ogs_sbi_stream_t *sbi_sess = data;
+    ogs_assert(stream);
+    ogs_assert(stream->server);
 
-    ogs_assert(sbi_sess);
-    ogs_assert(sbi_sess->server);
-
-    return sbi_sess->server;
+    return stream->server;
 }
 
 static int on_frame_recv_callback(nghttp2_session *session,

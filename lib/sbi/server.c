@@ -107,7 +107,7 @@ void ogs_sbi_server_stop_all(void)
 void ogs_sbi_server_send_response(
         ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
-    ogs_sbi_server_actions.send_response(response, stream);
+    ogs_sbi_server_actions.send_response(stream, response);
 }
 
 void ogs_sbi_server_send_problem(

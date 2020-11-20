@@ -35,9 +35,10 @@ static void server_start(ogs_sbi_server_t *server,
         int (*cb)(ogs_sbi_request_t *request, void *data));
 static void server_stop(ogs_sbi_server_t *server);
 
-static void server_send_response(ogs_sbi_response_t *response, void *data);
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
 
-static ogs_sbi_server_t *server_from_session(void *data);
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream);
 
 const ogs_sbi_server_actions_t ogs_mhd_server_actions = {
     server_init,
@@ -47,7 +48,7 @@ const ogs_sbi_server_actions_t ogs_mhd_server_actions = {
     server_stop,
 
     server_send_response,
-    server_from_session,
+    server_from_stream,
 };
 
 static void run(short when, ogs_socket_t fd, void *data);
@@ -286,7 +287,8 @@ static void server_stop(ogs_sbi_server_t *server)
     }
 }
 
-static void server_send_response(ogs_sbi_response_t *response, void *data)
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
     int ret;
     int status;
@@ -301,7 +303,7 @@ static void server_send_response(ogs_sbi_response_t *response, void *data)
     ogs_sbi_request_t *request = NULL;
     ogs_sbi_session_t *sbi_sess = NULL;
 
-    sbi_sess = data;
+    sbi_sess = (ogs_sbi_session_t *)stream;
     ogs_assert(sbi_sess);
     ogs_assert(response);
 
@@ -541,9 +543,9 @@ static void notify_completed(
     ogs_sbi_request_free(request);
 }
 
-static ogs_sbi_server_t *server_from_session(void *data)
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
 {
-    ogs_sbi_session_t *sbi_sess = data;
+    ogs_sbi_session_t *sbi_sess = (ogs_sbi_session_t *)stream;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->server);
