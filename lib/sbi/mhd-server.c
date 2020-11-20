@@ -35,10 +35,9 @@ static void server_start(ogs_sbi_server_t *server,
         int (*cb)(ogs_sbi_request_t *request, void *data));
 static void server_stop(ogs_sbi_server_t *server);
 
-static void server_send_response(
-        ogs_sbi_stream_t *sbi_sess, ogs_sbi_response_t *response);
+static void server_send_response(ogs_sbi_response_t *response, void *data);
 
-static ogs_sbi_server_t *server_from_session(void *session);
+static ogs_sbi_server_t *server_from_session(void *data);
 
 const ogs_sbi_server_actions_t ogs_mhd_server_actions = {
     server_init,
@@ -73,7 +72,7 @@ static void notify_completed(
 
 static void session_timer_expired(void *data);
 
-typedef struct ogs_sbi_stream_s {
+typedef struct ogs_sbi_session_s {
     ogs_lnode_t             lnode;
 
     struct MHD_Connection   *connection;
@@ -99,9 +98,9 @@ typedef struct ogs_sbi_stream_s {
     ogs_timer_t             *timer;
 
     void *data;
-} ogs_sbi_stream_t;
+} ogs_sbi_session_t;
 
-static OGS_POOL(session_pool, ogs_sbi_stream_t);
+static OGS_POOL(session_pool, ogs_sbi_session_t);
 
 static void server_init(int num_of_session_pool)
 {
@@ -113,10 +112,10 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static ogs_sbi_stream_t *session_add(ogs_sbi_server_t *server,
+static ogs_sbi_session_t *session_add(ogs_sbi_server_t *server,
         ogs_sbi_request_t *request, struct MHD_Connection *connection)
 {
-    ogs_sbi_stream_t *sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(request);
@@ -124,7 +123,7 @@ static ogs_sbi_stream_t *session_add(ogs_sbi_server_t *server,
 
     ogs_pool_alloc(&session_pool, &sbi_sess);
     ogs_assert(sbi_sess);
-    memset(sbi_sess, 0, sizeof(ogs_sbi_stream_t));
+    memset(sbi_sess, 0, sizeof(ogs_sbi_session_t));
 
     sbi_sess->server = server;
     sbi_sess->request = request;
@@ -144,7 +143,7 @@ static ogs_sbi_stream_t *session_add(ogs_sbi_server_t *server,
     return sbi_sess;
 }
 
-static void session_remove(ogs_sbi_stream_t *sbi_sess)
+static void session_remove(ogs_sbi_session_t *sbi_sess)
 {
     struct MHD_Connection *connection;
     ogs_sbi_server_t *server = NULL;
@@ -168,7 +167,7 @@ static void session_remove(ogs_sbi_stream_t *sbi_sess)
 
 static void session_timer_expired(void *data)
 {
-    ogs_sbi_stream_t *sbi_sess = data;
+    ogs_sbi_session_t *sbi_sess = data;
 
     ogs_assert(sbi_sess);
 
@@ -183,7 +182,7 @@ static void session_timer_expired(void *data)
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    ogs_sbi_stream_t *sbi_sess = NULL, *next_sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL, *next_sbi_sess = NULL;
 
     ogs_assert(server);
 
@@ -287,8 +286,7 @@ static void server_stop(ogs_sbi_server_t *server)
     }
 }
 
-static void server_send_response(
-        ogs_sbi_stream_t *sbi_sess, ogs_sbi_response_t *response)
+static void server_send_response(ogs_sbi_response_t *response, void *data)
 {
     int ret;
     int status;
@@ -301,7 +299,9 @@ static void server_send_response(
 
     ogs_hash_index_t *hi;
     ogs_sbi_request_t *request = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
+    sbi_sess = data;
     ogs_assert(sbi_sess);
     ogs_assert(response);
 
@@ -430,7 +430,7 @@ static _MHD_Result access_handler(
 {
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
-    ogs_sbi_stream_t *sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
     server = cls;
     ogs_assert(server);
@@ -510,7 +510,7 @@ suspend:
     if (server->cb) {
         if (server->cb(request, sbi_sess) != OGS_OK) {
             ogs_warn("server callback error");
-            ogs_sbi_server_send_error(sbi_sess,
+            ogs_sbi_server_send_error((ogs_sbi_stream_t *)sbi_sess,
                     OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
                     "server callback error", NULL);
 
@@ -541,9 +541,9 @@ static void notify_completed(
     ogs_sbi_request_free(request);
 }
 
-static ogs_sbi_server_t *server_from_session(void *session)
+static ogs_sbi_server_t *server_from_session(void *data)
 {
-    ogs_sbi_stream_t *sbi_sess = session;
+    ogs_sbi_session_t *sbi_sess = data;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->server);
