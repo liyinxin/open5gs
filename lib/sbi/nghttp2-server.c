@@ -360,6 +360,10 @@ static int on_header_callback2(nghttp2_session *session,
                                nghttp2_rcbuf *name, nghttp2_rcbuf *value,
                                uint8_t flags, void *user_data);
 
+static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
+                                       int32_t stream_id, const uint8_t *data,
+                                       size_t len, void *user_data);
+
 static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
                                      void *user_data);
@@ -383,6 +387,9 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *nghttp2_sess)
 
     nghttp2_session_callbacks_set_on_header_callback2(
             callbacks, on_header_callback2);
+
+    nghttp2_session_callbacks_set_on_data_chunk_recv_callback(
+            callbacks, on_data_chunk_recv_callback);
 
     nghttp2_session_callbacks_set_on_begin_headers_callback(
             callbacks, on_begin_headers_callback);
@@ -459,7 +466,6 @@ static int on_header_callback2(nghttp2_session *session,
     const char ACCEPT[] = "accept";
     const char ACCEPT_ENCODING[] = "accept-encoding";
     const char CONTENT_TYPE[] = "content-type";
-    const char CONTENT_LENGTH[] = "content-length";
     const char LOCATION[] = "location";
 
     nghttp2_vec namebuf, valuebuf;
@@ -561,14 +567,6 @@ static int on_header_callback2(nghttp2_session *session,
 
         ogs_sbi_header_set(request->http.headers, OGS_SBI_LOCATION, valuestr);
 
-    } else if (namebuf.len == sizeof(CONTENT_LENGTH) - 1 &&
-            memcmp(CONTENT_LENGTH, namebuf.base, namebuf.len) == 0) {
-
-        request->http.content_length = atoi(valuestr);
-        request->http.content =
-            (char*)ogs_malloc(request->http.content_length + 1);
-        ogs_assert(request->http.content);
-
     } else {
 
         ogs_sbi_header_set(request->http.headers, namestr, valuestr);
@@ -595,6 +593,32 @@ cleanup:
 
     if (namestr) ogs_free(namestr);
     if (valuestr) ogs_free(valuestr);
+
+    return 0;
+}
+
+static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
+                                       int32_t stream_id, const uint8_t *data,
+                                       size_t len, void *user_data)
+{
+    ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sbi_request_t *request = NULL;
+
+    ogs_assert(sbi_sess);
+
+    request = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (!request) {
+        return 0;
+    }
+
+    ogs_assert(data);
+    ogs_assert(len);
+
+    request->http.content_length = len;
+    request->http.content = (char*)ogs_malloc(request->http.content_length + 1);
+    ogs_assert(request->http.content);
+    memcpy(request->http.content, data, len);
+    request->http.content[request->http.content_length] = '\0';
 
     return 0;
 }
