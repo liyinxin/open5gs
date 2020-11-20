@@ -56,7 +56,7 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
     ausf_ue_t *ausf_ue = NULL;
 
     ogs_sbi_server_t *server = NULL;
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_message_t *message = NULL;
 
     ogs_assert(s);

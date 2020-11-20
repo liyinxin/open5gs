@@ -20,7 +20,7 @@
 #include "ngap-path.h"
 
 void ngap_send_to_n2sm(smf_sess_t *sess,
-        ogs_sbi_session_t *session, int type, ogs_pkbuf_t *pkbuf)
+        ogs_sbi_stream_t *session, int type, ogs_pkbuf_t *pkbuf)
 {
     int rv;
     smf_event_t *e = NULL;

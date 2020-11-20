@@ -20,7 +20,7 @@
 #include "nnrf-handler.h"
 
 bool nrf_nnrf_handle_nf_register(ogs_sbi_nf_instance_t *nf_instance,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     int status;
     bool handled;
@@ -61,7 +61,7 @@ bool nrf_nnrf_handle_nf_register(ogs_sbi_nf_instance_t *nf_instance,
 }
 
 bool nrf_nnrf_handle_nf_update(ogs_sbi_nf_instance_t *nf_instance,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     ogs_sbi_response_t *response = NULL;
     OpenAPI_list_t *PatchItemList = NULL;
@@ -110,7 +110,7 @@ bool nrf_nnrf_handle_nf_update(ogs_sbi_nf_instance_t *nf_instance,
 }
 
 bool nrf_nnrf_handle_nf_status_subscribe(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     int status;
     ogs_sbi_response_t *response = NULL;
@@ -201,7 +201,7 @@ bool nrf_nnrf_handle_nf_status_subscribe(
 }
 
 bool nrf_nnrf_handle_nf_status_unsubscribe(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     ogs_sbi_subscription_t *subscription = NULL;
     ogs_assert(session);
@@ -227,7 +227,7 @@ bool nrf_nnrf_handle_nf_status_unsubscribe(
 }
 
 bool nrf_nnrf_handle_nf_list_retrieval(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_server_t *server = NULL;
@@ -288,7 +288,7 @@ bool nrf_nnrf_handle_nf_list_retrieval(
 }
 
 bool nrf_nnrf_handle_nf_profile_retrieval(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;
@@ -325,7 +325,7 @@ bool nrf_nnrf_handle_nf_profile_retrieval(
 }
 
 bool nrf_nnrf_handle_nf_discover(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;

@@ -22,7 +22,7 @@
 #include "nudr-handler.h"
 
 bool udr_nudr_dr_handle_subscription_authentication(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     int rv;
 
@@ -233,7 +233,7 @@ bool udr_nudr_dr_handle_subscription_authentication(
 }
 
 bool udr_nudr_dr_handle_subscription_context(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;
@@ -307,7 +307,7 @@ static OpenAPI_pdu_session_type_e pdu_session_type_from_dbi(uint8_t pdn_type)
 }
 
 bool udr_nudr_dr_handle_subscription_provisioned(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     int rv, i;
 

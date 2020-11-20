@@ -38,7 +38,7 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
 {
     int rv;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_request_t *request = NULL;
 
     ogs_sbi_nf_instance_t *nf_instance = NULL;

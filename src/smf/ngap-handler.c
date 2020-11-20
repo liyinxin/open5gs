@@ -22,7 +22,7 @@
 #include "pfcp-path.h"
 
 int ngap_handle_pdu_session_resource_setup_response_transfer(
-        smf_sess_t *sess, ogs_sbi_session_t *session, ogs_pkbuf_t *pkbuf)
+        smf_sess_t *sess, ogs_sbi_stream_t *session, ogs_pkbuf_t *pkbuf)
 {
     smf_ue_t *smf_ue = NULL;
     smf_bearer_t *qos_flow = NULL;

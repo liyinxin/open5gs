@@ -25,7 +25,7 @@
 #include "sbi-path.h"
 
 int amf_namf_comm_handle_n1_n2_message_transfer(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     int status;
 
@@ -192,7 +192,7 @@ int amf_namf_comm_handle_n1_n2_message_transfer(
 }
 
 int amf_namf_callback_handle_sm_context_status(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     int status = OGS_SBI_HTTP_STATUS_NO_CONTENT;
 

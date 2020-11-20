@@ -20,7 +20,7 @@
 #include "nudr-handler.h"
 
 bool udm_nudr_dr_handle_subscription_authentication(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_server_t *server = NULL;
 
@@ -251,7 +251,7 @@ bool udm_nudr_dr_handle_subscription_authentication(
 }
 
 bool udm_nudr_dr_handle_subscription_context(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_server_t *server = NULL;
 
@@ -331,7 +331,7 @@ bool udm_nudr_dr_handle_subscription_context(
 }
 
 bool udm_nudr_dr_handle_subscription_provisioned(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_server_t *server = NULL;
 

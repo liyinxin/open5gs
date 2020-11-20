@@ -61,7 +61,7 @@ void smf_state_operational(ogs_fsm_t *s, smf_event_t *e)
     ogs_pfcp_xact_t *pfcp_xact = NULL;
     ogs_pfcp_message_t pfcp_message;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_request_t *sbi_request = NULL;
 
     ogs_sbi_nf_instance_t *nf_instance = NULL;

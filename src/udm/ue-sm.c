@@ -38,7 +38,7 @@ void udm_ue_state_operational(ogs_fsm_t *s, udm_event_t *e)
     bool handled;
     udm_ue_t *udm_ue = NULL;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_message_t *message = NULL;
 
     ogs_assert(s);

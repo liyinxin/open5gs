@@ -180,7 +180,7 @@ static void sess_5gc_timeout(ogs_pfcp_xact_t *xact, void *data)
 {
     smf_ue_t *smf_ue = NULL;
     smf_sess_t *sess = NULL;
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     uint8_t type;
     char *strerror = NULL;
 
@@ -243,7 +243,7 @@ static void sess_epc_timeout(ogs_pfcp_xact_t *xact, void *data)
 }
 
 void smf_5gc_pfcp_send_session_establishment_request(
-        smf_sess_t *sess, ogs_sbi_session_t *session)
+        smf_sess_t *sess, ogs_sbi_stream_t *session)
 {
     int rv;
     ogs_pkbuf_t *n4buf = NULL;
@@ -270,7 +270,7 @@ void smf_5gc_pfcp_send_session_establishment_request(
 }
 
 void smf_5gc_pfcp_send_session_modification_request(
-        smf_sess_t *sess, ogs_sbi_session_t *session, uint64_t flags)
+        smf_sess_t *sess, ogs_sbi_stream_t *session, uint64_t flags)
 {
     int rv;
     ogs_pkbuf_t *n4buf = NULL;
@@ -298,7 +298,7 @@ void smf_5gc_pfcp_send_session_modification_request(
 }
 
 void smf_5gc_pfcp_send_qos_flow_modification_request(smf_bearer_t *qos_flow,
-        ogs_sbi_session_t *session, uint64_t flags)
+        ogs_sbi_stream_t *session, uint64_t flags)
 {
     int rv;
     ogs_pkbuf_t *n4buf = NULL;
@@ -331,7 +331,7 @@ void smf_5gc_pfcp_send_qos_flow_modification_request(smf_bearer_t *qos_flow,
 }
 
 void smf_5gc_pfcp_send_session_deletion_request(
-        smf_sess_t *sess, ogs_sbi_session_t *session, int trigger)
+        smf_sess_t *sess, ogs_sbi_stream_t *session, int trigger)
 {
     int rv;
     ogs_pkbuf_t *n4buf = NULL;

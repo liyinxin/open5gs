@@ -89,7 +89,7 @@ void ausf_nnrf_handle_nf_status_subscribe(
 }
 
 bool ausf_nnrf_handle_nf_status_notify(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     ogs_sbi_response_t *response = NULL;
     OpenAPI_notification_data_t *NotificationData = NULL;
@@ -212,7 +212,7 @@ void ausf_nnrf_handle_nf_discover(
 {
     ogs_sbi_object_t *sbi_object = NULL;
     ogs_sbi_nf_instance_t *nf_instance = NULL;
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
 
     OpenAPI_search_result_t *SearchResult = NULL;
     OpenAPI_lnode_t *node = NULL;

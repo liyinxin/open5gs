@@ -39,7 +39,7 @@ void udm_state_operational(ogs_fsm_t *s, udm_event_t *e)
     int rv;
     const char *api_version = NULL;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_request_t *request = NULL;
 
     ogs_sbi_nf_instance_t *nf_instance = NULL;

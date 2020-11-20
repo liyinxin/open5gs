@@ -46,7 +46,7 @@ void smf_gsm_state_operational(ogs_fsm_t *s, smf_event_t *e)
 
     ogs_nas_5gs_message_t *nas_message = NULL;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_message_t *sbi_message = NULL;
 
     ogs_assert(s);

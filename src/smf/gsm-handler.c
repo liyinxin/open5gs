@@ -25,7 +25,7 @@
 #define OGS_LOG_DOMAIN __gsm_log_domain
 
 int gsm_handle_pdu_session_establishment_request(
-        smf_sess_t *sess, ogs_sbi_session_t *session,
+        smf_sess_t *sess, ogs_sbi_stream_t *session,
         ogs_nas_5gs_pdu_session_establishment_request_t *
             pdu_session_establishment_request)
 {

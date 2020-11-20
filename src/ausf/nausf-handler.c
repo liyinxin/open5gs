@@ -22,7 +22,7 @@
 #include "nausf-handler.h"
 
 bool ausf_nausf_auth_handle_authenticate(ausf_ue_t *ausf_ue,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     OpenAPI_authentication_info_t *AuthenticationInfo = NULL;
     char *serving_network_name = NULL;
@@ -59,7 +59,7 @@ bool ausf_nausf_auth_handle_authenticate(ausf_ue_t *ausf_ue,
 }
 
 bool ausf_nausf_auth_handle_authenticate_confirmation(ausf_ue_t *ausf_ue,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     OpenAPI_confirmation_data_t *ConfirmationData = NULL;
     char *res_star_string = NULL;

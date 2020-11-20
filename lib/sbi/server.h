@@ -28,7 +28,7 @@
 extern "C" {
 #endif
 
-typedef struct ogs_sbi_session_s ogs_sbi_session_t;
+typedef struct ogs_sbi_stream_s ogs_sbi_stream_t;
 
 typedef struct ogs_sbi_server_s {
     ogs_socknode_t  node;
@@ -38,7 +38,7 @@ typedef struct ogs_sbi_server_s {
         const char  *pem;
     } tls;
 
-    int (*cb)(ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+    int (*cb)(ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
             ogs_sbi_request_t *request);
     void *data;
 
@@ -53,12 +53,12 @@ typedef struct ogs_sbi_server_actions_s {
     void (*cleanup)(void);
 
     void (*start)(ogs_sbi_server_t *server, int (*cb)(
-                ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+                ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
                 ogs_sbi_request_t *request));
     void (*stop)(ogs_sbi_server_t *server);
 
     void (*send_response)(
-            ogs_sbi_session_t *session, ogs_sbi_response_t *response);
+            ogs_sbi_stream_t *session, ogs_sbi_response_t *response);
 
     ogs_sbi_server_t *(*from_session)(void *session);
 } ogs_sbi_server_actions_t;
@@ -71,19 +71,19 @@ void ogs_sbi_server_remove(ogs_sbi_server_t *server);
 void ogs_sbi_server_remove_all(void);
 
 void ogs_sbi_server_start_all(int (*cb)(
-            ogs_sbi_server_t *server, ogs_sbi_session_t *session,
+            ogs_sbi_server_t *server, ogs_sbi_stream_t *session,
             ogs_sbi_request_t *request));
 void ogs_sbi_server_stop_all(void);
 
 void ogs_sbi_server_send_response(
-        ogs_sbi_session_t *session, ogs_sbi_response_t *response);
-void ogs_sbi_server_send_error(ogs_sbi_session_t *session,
+        ogs_sbi_stream_t *session, ogs_sbi_response_t *response);
+void ogs_sbi_server_send_error(ogs_sbi_stream_t *session,
         int status, ogs_sbi_message_t *message,
         const char *title, const char *detail);
 void ogs_sbi_server_send_problem(
-        ogs_sbi_session_t *session, OpenAPI_problem_details_t *problem);
+        ogs_sbi_stream_t *session, OpenAPI_problem_details_t *problem);
 
-ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_session_t *session);
+ogs_sbi_server_t *ogs_sbi_server_from_session(ogs_sbi_stream_t *session);
 
 #ifdef __cplusplus
 }

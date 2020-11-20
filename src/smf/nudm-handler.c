@@ -20,7 +20,7 @@
 #include "nudm-handler.h"
 #include "pfcp-path.h"
 
-bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_session_t *session,
+bool smf_nudm_sdm_handle_get(smf_sess_t *sess, ogs_sbi_stream_t *session,
         ogs_sbi_message_t *recvmsg)
 {
     char buf1[OGS_ADDRSTRLEN];

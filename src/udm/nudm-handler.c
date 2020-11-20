@@ -22,7 +22,7 @@
 #include "nudm-handler.h"
 
 bool udm_nudm_ueau_handle_get(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     OpenAPI_authentication_info_request_t *AuthenticationInfoRequest = NULL;
     OpenAPI_resynchronization_info_t *ResynchronizationInfo = NULL;
@@ -160,7 +160,7 @@ bool udm_nudm_ueau_handle_get(
 }
 
 bool udm_nudm_ueau_handle_result_confirmation_inform(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     ogs_assert(udm_ue);
     ogs_assert(session);
@@ -183,7 +183,7 @@ bool udm_nudm_ueau_handle_result_confirmation_inform(
 }
 
 bool udm_nudm_uecm_handle_registration(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     OpenAPI_amf3_gpp_access_registration_t *Amf3GppAccessRegistration = NULL;
     OpenAPI_guami_t *Guami = NULL;
@@ -262,7 +262,7 @@ bool udm_nudm_uecm_handle_registration(
 }
 
 bool udm_nudm_sdm_handle_subscription_provisioned(
-    udm_ue_t *udm_ue, ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+    udm_ue_t *udm_ue, ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;

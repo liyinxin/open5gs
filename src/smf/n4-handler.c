@@ -101,7 +101,7 @@ void smf_5gc_n4_handle_session_establishment_response(
 {
     int i;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
 
     uint8_t pfcp_cause_value = OGS_PFCP_CAUSE_REQUEST_ACCEPTED;
     uint8_t offending_ie_value = 0;
@@ -198,7 +198,7 @@ void smf_5gc_n4_handle_session_modification_response(
 {
     int status = 0;
     uint64_t flags = 0;
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
 
     ogs_assert(xact);
     ogs_assert(rsp);
@@ -297,7 +297,7 @@ void smf_5gc_n4_handle_session_deletion_response(
     int status = 0;
     int trigger;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
 
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;

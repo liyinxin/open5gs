@@ -20,7 +20,7 @@
 #include "sbi-path.h"
 
 static int server_cb(ogs_sbi_server_t *server,
-        ogs_sbi_session_t *session, ogs_sbi_request_t *request)
+        ogs_sbi_stream_t *session, ogs_sbi_request_t *request)
 {
     udm_event_t *e = NULL;
     int rv;
@@ -130,7 +130,7 @@ void udm_sbi_send(ogs_sbi_nf_instance_t *nf_instance, ogs_sbi_xact_t *xact)
 }
 
 void udm_sbi_discover_and_send(OpenAPI_nf_type_e target_nf_type,
-        udm_ue_t *udm_ue, ogs_sbi_session_t *session, void *data,
+        udm_ue_t *udm_ue, ogs_sbi_stream_t *session, void *data,
         ogs_sbi_request_t *(*build)(udm_ue_t *udm_ue, void *data))
 {
     ogs_sbi_xact_t *xact = NULL;

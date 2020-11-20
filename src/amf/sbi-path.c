@@ -23,7 +23,7 @@
 #include "nudm-build.h"
 
 static int server_cb(ogs_sbi_server_t *server,
-        ogs_sbi_session_t *session, ogs_sbi_request_t *request)
+        ogs_sbi_stream_t *session, ogs_sbi_request_t *request)
 {
     amf_event_t *e = NULL;
     int rv;

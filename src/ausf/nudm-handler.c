@@ -33,7 +33,7 @@ static const char *links_member_name(OpenAPI_auth_type_e auth_type)
 }
 
 bool ausf_nudm_ueau_handle_get(ausf_ue_t *ausf_ue,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_server_t *server = NULL;
 
@@ -206,7 +206,7 @@ bool ausf_nudm_ueau_handle_get(ausf_ue_t *ausf_ue,
 }
 
 bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
-        ogs_sbi_session_t *session, ogs_sbi_message_t *recvmsg)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *recvmsg)
 {
     ogs_sbi_message_t sendmsg;
     ogs_sbi_response_t *response = NULL;

@@ -20,7 +20,7 @@
 #include "nas-path.h"
 
 void nas_5gs_send_to_gsm(
-        smf_sess_t *sess, ogs_sbi_session_t *session, ogs_pkbuf_t *pkbuf)
+        smf_sess_t *sess, ogs_sbi_stream_t *session, ogs_pkbuf_t *pkbuf)
 {
     int rv;
     smf_event_t *e = NULL;

@@ -89,7 +89,7 @@ void udr_nnrf_handle_nf_status_subscribe(
 }
 
 bool udr_nnrf_handle_nf_status_notify(
-        ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+        ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     ogs_sbi_response_t *response = NULL;
     OpenAPI_notification_data_t *NotificationData = NULL;

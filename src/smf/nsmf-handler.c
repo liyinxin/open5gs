@@ -24,7 +24,7 @@
 #include "nsmf-handler.h"
 
 bool smf_nsmf_handle_create_sm_context(
-    smf_sess_t *sess, ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+    smf_sess_t *sess, ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     smf_ue_t *smf_ue = NULL;
 
@@ -201,7 +201,7 @@ bool smf_nsmf_handle_create_sm_context(
 }
 
 bool smf_nsmf_handle_update_sm_context(
-    smf_sess_t *sess, ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+    smf_sess_t *sess, ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     int i;
     smf_ue_t *smf_ue = NULL;
@@ -447,7 +447,7 @@ bool smf_nsmf_handle_update_sm_context(
 }
 
 bool smf_nsmf_handle_release_sm_context(
-    smf_sess_t *sess, ogs_sbi_session_t *session, ogs_sbi_message_t *message)
+    smf_sess_t *sess, ogs_sbi_stream_t *session, ogs_sbi_message_t *message)
 {
     OpenAPI_sm_context_release_data_t *SmContextReleaseData = NULL;
 

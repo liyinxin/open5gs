@@ -86,7 +86,7 @@ void nrf_nf_state_will_register(ogs_fsm_t *s, nrf_event_t *e)
     bool handled;
     ogs_sbi_nf_instance_t *nf_instance = NULL;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_message_t *message = NULL;
 
     ogs_assert(s);
@@ -171,7 +171,7 @@ void nrf_nf_state_registered(ogs_fsm_t *s, nrf_event_t *e)
     bool handled;
     ogs_sbi_nf_instance_t *nf_instance = NULL;
 
-    ogs_sbi_session_t *session = NULL;
+    ogs_sbi_stream_t *session = NULL;
     ogs_sbi_message_t *message = NULL;
     ogs_sbi_response_t *response = NULL;
 
