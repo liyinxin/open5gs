@@ -293,15 +293,13 @@ static void server_send_response(
                 stream->stream_id, nva, nvlen, NULL);
     }
 
-    ogs_sbi_response_free(response);
-
     if (session_send(sbi_sess) != OGS_OK) {
         ogs_error("session_send() failed");
         session_remove(sbi_sess);
-        return;
     }
 
-    stream_remove(stream);
+    ogs_sbi_response_free(response);
+    ogs_free(nva);
 }
 
 static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
