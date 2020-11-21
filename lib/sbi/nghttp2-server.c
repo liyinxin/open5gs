@@ -24,7 +24,6 @@
 #include <netinet/tcp.h>
 #include <nghttp2/nghttp2.h>
 
-#if 0
 static char status_string[600][4] = {
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
@@ -70,7 +69,6 @@ static ogs_sbi_pseudo_header_t pseudo_headers[] = {
     { .name = ":authority", .len = 10 },
     { .name = ":path",      .len = 5  },
 };
-#endif
 
 static void server_init(int num_of_stream_pool);
 static void server_final(void);
@@ -433,7 +431,6 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     ogs_pkbuf_free(pkbuf);
 }
 
-#if 0
 static void add_header(nghttp2_nv *nv, const char *key, const char *value)
 {
     nv->name = (uint8_t *)key;
@@ -493,28 +490,31 @@ static void get_date_string (char *date,
 		 (unsigned int) now.tm_sec,
 		 end_of_line);
 }
-#endif
 
 static void server_send_response(
         ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
-#if 0
+    ogs_sbi_session_t *sbi_sess = NULL;
     ogs_hash_index_t *hi;
     nghttp2_nv *nva;
     size_t nvlen;
     int i;
     char date[128];
 
+    ogs_assert(stream);
+    sbi_sess = stream->session;
     ogs_assert(sbi_sess);
     ogs_assert(response);
 
     nvlen = 2; /* :status && date */
+#if 0
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
     if (response->http.content && response->http.content_length)
         nvlen++;
+#endif
 
     nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
     ogs_assert(nva);
@@ -527,6 +527,7 @@ static void server_send_response(
     get_date_string(date, sizeof (date), "", "");
     add_header(&nva[i++], "date", date);
 
+#if 0
     if (response->http.content) {
         ogs_fatal("content = %s", response->http.content);
     } else {
@@ -539,12 +540,19 @@ static void server_send_response(
         char *val = ogs_hash_this_val(hi);
         ogs_fatal("K,V = %s, %s", key, val);
     }
+#endif
 
 	nghttp2_submit_response(sbi_sess->session,
             stream->stream_id, nva, nvlen, NULL);
-#endif
 
     ogs_sbi_response_free(response);
+
+    if (session_send(sbi_sess) != OGS_OK) {
+        ogs_error("session_send() failed");
+        session_remove(sbi_sess);
+        return;
+    }
+
     stream_remove(stream);
 }
 
