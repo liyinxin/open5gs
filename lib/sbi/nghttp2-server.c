@@ -251,12 +251,15 @@ static void server_send_response(
     ogs_assert(response);
 
     nvlen = 2; /* :status && date */
+
+#ifndef NO_DATA
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
     if (response->http.content && response->http.content_length)
         nvlen++;
+#endif
 
     nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
     ogs_assert(nva);
@@ -269,6 +272,7 @@ static void server_send_response(
     get_date_string(date, sizeof (date), "", "");
     add_header(&nva[i++], "date", date);
 
+#ifndef NO_DATA
     if (response->http.content && response->http.content_length) {
         ogs_snprintf(clen, sizeof(clen),
                 "%d", (int)response->http.content_length);
@@ -279,7 +283,9 @@ static void server_send_response(
             hi; hi = ogs_hash_next(hi)) {
         add_header(&nva[i++], ogs_hash_this_key(hi), ogs_hash_this_val(hi));
     }
+#endif
 
+#ifndef NO_DATA
     if (response->http.content && response->http.content_length) {
         nghttp2_data_provider data_prd;
 
@@ -289,10 +295,13 @@ static void server_send_response(
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, &data_prd);
     } else {
+#endif
 
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, NULL);
+#ifndef NO_DATA
     }
+#endif
 
     session_send(sbi_sess);
 
