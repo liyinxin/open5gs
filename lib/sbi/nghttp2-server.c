@@ -897,8 +897,8 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
             response->http.content, response->http.content_length);
 
     if (padlen > 0) {
+        memset(pkbuf->tail, 0, padlen-1);
         ogs_pkbuf_put(pkbuf, padlen-1);
-        memset(pkbuf->data-(padlen-1), 0, padlen-1);
     }
 
     session_write_to_buffer(sbi_sess, pkbuf);
