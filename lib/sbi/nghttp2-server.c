@@ -289,6 +289,7 @@ static void server_send_response(
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, &data_prd);
     } else {
+
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, NULL);
     }
@@ -871,33 +872,6 @@ static int on_begin_headers_callback(nghttp2_session *session,
     return 0;
 }
 
-static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
-                             size_t length, int flags, void *user_data)
-{
-    ogs_sbi_session_t *sbi_sess = user_data;
-    ogs_sock_t *sock = NULL;
-    ogs_socket_t fd = INVALID_SOCKET;
-
-    ogs_pkbuf_t *pkbuf = NULL;
-
-    ogs_assert(sbi_sess);
-    sock = sbi_sess->sock;
-    ogs_assert(sock);
-    fd = sock->fd;
-    ogs_assert(fd != INVALID_SOCKET);
-
-    ogs_assert(data);
-    ogs_assert(length);
-
-    pkbuf = ogs_pkbuf_alloc(NULL, length);
-    ogs_assert(pkbuf);
-    ogs_pkbuf_put_data(pkbuf, data, length);
-
-    session_write_to_buffer(sbi_sess, pkbuf);
-
-    return length;
-}
-
 /* Send HTTP/2 client connection header, which includes 24 bytes
    magic octets and SETTINGS frame */
 static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
@@ -947,6 +921,33 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
         return OGS_ERROR;
     }
     return OGS_OK;
+}
+
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data)
+{
+    ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sock_t *sock = NULL;
+    ogs_socket_t fd = INVALID_SOCKET;
+
+    ogs_pkbuf_t *pkbuf = NULL;
+
+    ogs_assert(sbi_sess);
+    sock = sbi_sess->sock;
+    ogs_assert(sock);
+    fd = sock->fd;
+    ogs_assert(fd != INVALID_SOCKET);
+
+    ogs_assert(data);
+    ogs_assert(length);
+
+    pkbuf = ogs_pkbuf_alloc(NULL, length);
+    ogs_assert(pkbuf);
+    ogs_pkbuf_put_data(pkbuf, data, length);
+
+    session_write_to_buffer(sbi_sess, pkbuf);
+
+    return length;
 }
 
 static void session_write_to_buffer(
