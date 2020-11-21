@@ -100,7 +100,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data);
 
 static void session_timer_expired(void *data);
 
-typedef struct ogs_sbi_stream_s {
+typedef struct ogs_sbi_session_s {
     ogs_lnode_t             lnode;
 
     ogs_sock_t              *sock;
@@ -119,19 +119,19 @@ typedef struct ogs_sbi_stream_s {
     ogs_timer_t             *timer;
 
     void *data;
-} ogs_sbi_stream_t;
+} ogs_sbi_session_t;
 
-static void initialize_nghttp2_session(ogs_sbi_stream_t *sbi_sess);
-static int submit_server_connection_header(ogs_sbi_stream_t *sbi_sess);
-static int submit_rst_stream(ogs_sbi_stream_t *sbi_sess,
+static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
+static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
+static int submit_rst_stream(ogs_sbi_session_t *sbi_sess,
         ogs_sbi_request_t *request, uint32_t error_code);
-static int session_send(ogs_sbi_stream_t *sbi_sess);
+static int session_send(ogs_sbi_session_t *sbi_sess);
 
 static void session_write_to_buffer(
-        ogs_sbi_stream_t *sbi_sess, ogs_pkbuf_t *pkbuf);
+        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
 static void session_write_callback(short when, ogs_socket_t fd, void *data);
 
-static OGS_POOL(session_pool, ogs_sbi_stream_t);
+static OGS_POOL(session_pool, ogs_sbi_session_t);
 
 static void server_init(int num_of_stream_pool)
 {
@@ -143,17 +143,17 @@ static void server_final(void)
     ogs_pool_final(&session_pool);
 }
 
-static ogs_sbi_stream_t *session_add(
+static ogs_sbi_session_t *session_add(
         ogs_sbi_server_t *server, ogs_sock_t *sock)
 {
-    ogs_sbi_stream_t *sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
     ogs_assert(server);
     ogs_assert(sock);
 
     ogs_pool_alloc(&session_pool, &sbi_sess);
     ogs_assert(sbi_sess);
-    memset(sbi_sess, 0, sizeof(ogs_sbi_stream_t));
+    memset(sbi_sess, 0, sizeof(ogs_sbi_session_t));
 
     sbi_sess->server = server;
     sbi_sess->sock = sock;
@@ -174,7 +174,7 @@ static ogs_sbi_stream_t *session_add(
     return sbi_sess;
 }
 
-static void session_remove(ogs_sbi_stream_t *sbi_sess)
+static void session_remove(ogs_sbi_session_t *sbi_sess)
 {
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL, *next_request = NULL;
@@ -217,7 +217,7 @@ static void session_remove(ogs_sbi_stream_t *sbi_sess)
 
 static void session_timer_expired(void *data)
 {
-    ogs_sbi_stream_t *sbi_sess = data;
+    ogs_sbi_session_t *sbi_sess = data;
 
     ogs_assert(sbi_sess);
 
@@ -228,7 +228,7 @@ static void session_timer_expired(void *data)
 
 static void session_remove_all(ogs_sbi_server_t *server)
 {
-    ogs_sbi_stream_t *sbi_sess = NULL, *next_sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL, *next_sbi_sess = NULL;
 
     ogs_assert(server);
 
@@ -285,7 +285,7 @@ static void server_stop(ogs_sbi_server_t *server)
 static void accept_handler(short when, ogs_socket_t fd, void *data)
 {
     ogs_sbi_server_t *server = data;
-    ogs_sbi_stream_t *sbi_sess = NULL;
+    ogs_sbi_session_t *sbi_sess = NULL;
     ogs_sock_t *sock = NULL;
     ogs_sock_t *new = NULL;
 
@@ -337,7 +337,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     char buf[OGS_ADDRSTRLEN];
     ogs_sockaddr_t *addr = NULL;
 
-    ogs_sbi_stream_t *sbi_sess = data;
+    ogs_sbi_session_t *sbi_sess = data;
     ogs_pkbuf_t *pkbuf = NULL;
     ssize_t readlen;
     int n;
@@ -495,10 +495,12 @@ static void server_send_response(
 
 static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
 {
-    ogs_assert(stream);
-    ogs_assert(stream->server);
+    ogs_sbi_session_t *sbi_sess = (ogs_sbi_session_t *)stream;
 
-    return stream->server;
+    ogs_assert(sbi_sess);
+    ogs_assert(sbi_sess->server);
+
+    return sbi_sess->server;
 }
 
 static int on_frame_recv_callback(nghttp2_session *session,
@@ -523,11 +525,11 @@ static int on_begin_headers_callback(nghttp2_session *session,
 static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
                              size_t length, int flags, void *user_data);
 
-static void initialize_nghttp2_session(ogs_sbi_stream_t *nghttp2_sess)
+static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess)
 {
     nghttp2_session_callbacks *callbacks = NULL;
 
-    ogs_assert(nghttp2_sess);
+    ogs_assert(sbi_sess);
 
     nghttp2_session_callbacks_new(&callbacks);
 
@@ -549,7 +551,7 @@ static void initialize_nghttp2_session(ogs_sbi_stream_t *nghttp2_sess)
     nghttp2_session_callbacks_set_send_callback(
             callbacks, send_callback);
 
-    nghttp2_session_server_new(&nghttp2_sess->session, callbacks, nghttp2_sess);
+    nghttp2_session_server_new(&sbi_sess->session, callbacks, sbi_sess);
 
     nghttp2_session_callbacks_del(callbacks);
 }
@@ -557,7 +559,7 @@ static void initialize_nghttp2_session(ogs_sbi_stream_t *nghttp2_sess)
 static int on_frame_recv_callback(nghttp2_session *session,
                                   const nghttp2_frame *frame, void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
 
     ogs_sbi_server_t *server = NULL;
     ogs_sbi_request_t *request = NULL;
@@ -580,6 +582,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
                 return 0;
             }
 
+#if 0
             if (server->cb) {
                 if (server->cb(request, sbi_sess) != OGS_OK) {
                     ogs_warn("server callback error");
@@ -593,6 +596,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
                 ogs_fatal("server callback is not registered");
                 ogs_assert_if_reached();
             }
+#endif
 
             break;
         }
@@ -607,7 +611,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
 static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
                                     uint32_t error_code, void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
     (void)error_code;
@@ -628,7 +632,7 @@ static int on_header_callback2(nghttp2_session *session,
                                nghttp2_rcbuf *name, nghttp2_rcbuf *value,
                                uint8_t flags, void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
     const char PATH[] = ":path";
@@ -771,7 +775,7 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
                                        int32_t stream_id, const uint8_t *data,
                                        size_t len, void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(sbi_sess);
@@ -797,7 +801,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
                                      void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(sbi_sess);
@@ -824,7 +828,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
 static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
                              size_t length, int flags, void *user_data)
 {
-    ogs_sbi_stream_t *sbi_sess = user_data;
+    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sock_t *sock = NULL;
     ogs_socket_t fd = INVALID_SOCKET;
 
@@ -850,7 +854,7 @@ static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
 
 /* Send HTTP/2 client connection header, which includes 24 bytes
    magic octets and SETTINGS frame */
-static int submit_server_connection_header(ogs_sbi_stream_t *sbi_sess)
+static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
 {
     nghttp2_settings_entry iv[1] = {
         { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
@@ -870,7 +874,7 @@ static int submit_server_connection_header(ogs_sbi_stream_t *sbi_sess)
     return OGS_OK;
 }
 
-static int submit_rst_stream(ogs_sbi_stream_t *sbi_sess,
+static int submit_rst_stream(ogs_sbi_session_t *sbi_sess,
         ogs_sbi_request_t *request, uint32_t error_code)
 {
     ogs_assert(sbi_sess);
@@ -883,7 +887,7 @@ static int submit_rst_stream(ogs_sbi_stream_t *sbi_sess,
 }
 
 /* Serialize the frame and send (or buffer) the data to buffer. */
-static int session_send(ogs_sbi_stream_t *sbi_sess)
+static int session_send(ogs_sbi_session_t *sbi_sess)
 {
     int rv;
 
@@ -900,7 +904,7 @@ static int session_send(ogs_sbi_stream_t *sbi_sess)
 }
 
 static void session_write_to_buffer(
-        ogs_sbi_stream_t *sbi_sess, ogs_pkbuf_t *pkbuf)
+        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf)
 {
     ogs_sock_t *sock = NULL;
     ogs_socket_t fd = INVALID_SOCKET;
@@ -925,7 +929,7 @@ static void session_write_to_buffer(
 
 static void session_write_callback(short when, ogs_socket_t fd, void *data)
 {
-    ogs_sbi_stream_t *sbi_sess = data;
+    ogs_sbi_session_t *sbi_sess = data;
     ogs_pkbuf_t *pkbuf = NULL;
 
     ogs_assert(sbi_sess);
