@@ -215,7 +215,7 @@ static void add_header(nghttp2_nv *nv, const char *key, const char *value)
     nv->flags = NGHTTP2_NV_FLAG_NONE;
 }
 
-static ssize_t response_read_cb(
+static ssize_t response_read_callback(
         nghttp2_session *session, int32_t stream_id,
         uint8_t *buf, size_t length, uint32_t *data_flags,
         nghttp2_data_source *source, void *user_data)
@@ -224,12 +224,12 @@ static ssize_t response_read_cb(
 
     ogs_assert(source);
     response = source->ptr;
-
     ogs_assert(response);
+
     ogs_assert(response->http.content);
     ogs_assert(response->http.content_length);
-    memcpy(buf, response->http.content, response->http.content_length);
 
+    *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
 
     return response->http.content_length;
@@ -253,15 +253,12 @@ static void server_send_response(
 
     nvlen = 2; /* :status && date */
 
-#define NO_DATA 1
-#ifndef NO_DATA
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
     if (response->http.content && response->http.content_length)
         nvlen++;
-#endif
 
     nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
     ogs_assert(nva);
@@ -274,7 +271,6 @@ static void server_send_response(
     get_date_string(date, sizeof (date), "", "");
     add_header(&nva[i++], "date", date);
 
-#ifndef NO_DATA
     if (response->http.content && response->http.content_length) {
         ogs_snprintf(clen, sizeof(clen),
                 "%d", (int)response->http.content_length);
@@ -285,25 +281,19 @@ static void server_send_response(
             hi; hi = ogs_hash_next(hi)) {
         add_header(&nva[i++], ogs_hash_this_key(hi), ogs_hash_this_val(hi));
     }
-#endif
 
-#ifndef NO_DATA
     if (response->http.content && response->http.content_length) {
         nghttp2_data_provider data_prd;
 
         data_prd.source.ptr = response;
-        data_prd.read_callback = response_read_cb;
+        data_prd.read_callback = response_read_callback;
 
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, &data_prd);
     } else {
-#endif
-
         nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, NULL);
-#ifndef NO_DATA
     }
-#endif
 
     session_send(sbi_sess);
 
@@ -571,8 +561,9 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
                                      void *user_data);
 
-static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
-                             size_t length, int flags, void *user_data);
+static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
+                                 const uint8_t *framehd, size_t length,
+                                 nghttp2_data_source *source, void *user_data);
 
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess)
 {
@@ -597,8 +588,8 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess)
     nghttp2_session_callbacks_set_on_begin_headers_callback(
             callbacks, on_begin_headers_callback);
 
-    nghttp2_session_callbacks_set_send_callback(
-            callbacks, send_callback);
+    nghttp2_session_callbacks_set_send_data_callback(
+            callbacks, on_send_data_callback);
 
     nghttp2_session_server_new(&sbi_sess->session, callbacks, sbi_sess);
 
@@ -871,14 +862,58 @@ static int on_begin_headers_callback(nghttp2_session *session,
     return 0;
 }
 
+static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
+                                 const uint8_t *framehd, size_t length,
+                                 nghttp2_data_source *source, void *user_data)
+{
+    ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sbi_response_t *response = NULL;
+    ogs_pkbuf_t *pkbuf = NULL;
+    size_t padlen = 0;
+
+    ogs_assert(sbi_sess);
+    ogs_assert(frame);
+    ogs_assert(framehd);
+    ogs_assert(length);
+
+    ogs_assert(source);
+    response = source->ptr;
+    ogs_assert(response);
+
+    ogs_assert(response->http.content);
+    ogs_assert(response->http.content_length);
+
+    pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
+    ogs_assert(pkbuf);
+    ogs_pkbuf_put_data(pkbuf, framehd, 9);
+
+    padlen = frame->data.padlen;
+
+    if (padlen > 0) {
+        ogs_pkbuf_put_u8(pkbuf, padlen-1);
+    }
+
+    ogs_pkbuf_put_data(pkbuf,
+            response->http.content, response->http.content_length);
+
+    if (padlen > 0) {
+        ogs_pkbuf_put(pkbuf, padlen-1);
+        memset(pkbuf->data-(padlen-1), 0, padlen-1);
+    }
+
+    session_write_to_buffer(sbi_sess, pkbuf);
+
+    return 0;
+}
+
 /* Send HTTP/2 client connection header, which includes 24 bytes
    magic octets and SETTINGS frame */
 static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
 {
+    int rv;
     nghttp2_settings_entry iv[1] = {
         { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
     };
-    int rv;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->session);
@@ -887,9 +922,10 @@ static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
             sbi_sess->session, NGHTTP2_FLAG_NONE, iv, OGS_ARRAY_SIZE(iv));
     if (rv != 0) {
         ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "nghttp2_submit_settings() failed");
+                "nghttp2_submit_settings() failed [%d]", (int)rv);
         return OGS_ERROR;
     }
+
     return OGS_OK;
 }
 
@@ -907,45 +943,37 @@ static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code)
 
 static int session_send(ogs_sbi_session_t *sbi_sess)
 {
-    int rv;
+    ogs_pkbuf_t *pkbuf = NULL;
+    ssize_t total_bytes = 0;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->session);
 
-    rv = nghttp2_session_send(sbi_sess->session);
-    if (rv != 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "nghttp_session_send() failed");
-        return OGS_ERROR;
+    for (;;) {
+        const uint8_t *data = NULL;
+        ssize_t data_len;
+
+        data_len = nghttp2_session_mem_send(sbi_sess->session, &data);
+        if (data_len < 0) {
+            ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
+                    "nghttp2_session_mem_send() failed [%d]", (int)data_len);
+            return OGS_ERROR;
+        }
+
+        if (data_len == 0) {
+            break;
+        }
+
+        pkbuf = ogs_pkbuf_alloc(NULL, data_len);
+        ogs_assert(pkbuf);
+        ogs_pkbuf_put_data(pkbuf, data, data_len);
+
+        session_write_to_buffer(sbi_sess, pkbuf);
+
+        total_bytes += data_len;
     }
-    return OGS_OK;
-}
 
-static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
-                             size_t length, int flags, void *user_data)
-{
-    ogs_sbi_session_t *sbi_sess = user_data;
-    ogs_sock_t *sock = NULL;
-    ogs_socket_t fd = INVALID_SOCKET;
-
-    ogs_pkbuf_t *pkbuf = NULL;
-
-    ogs_assert(sbi_sess);
-    sock = sbi_sess->sock;
-    ogs_assert(sock);
-    fd = sock->fd;
-    ogs_assert(fd != INVALID_SOCKET);
-
-    ogs_assert(data);
-    ogs_assert(length);
-
-    pkbuf = ogs_pkbuf_alloc(NULL, length);
-    ogs_assert(pkbuf);
-    ogs_pkbuf_put_data(pkbuf, data, length);
-
-    session_write_to_buffer(sbi_sess, pkbuf);
-
-    return length;
+    return total_bytes;
 }
 
 static void session_write_to_buffer(
