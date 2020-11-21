@@ -121,10 +121,18 @@ typedef struct ogs_sbi_session_s {
     void *data;
 } ogs_sbi_session_t;
 
+typedef struct ogs_sbi_stream_s {
+    ogs_lnode_t             lnode;
+
+    int32_t                 stream_id;
+    ogs_sbi_request_t       *request;
+
+    ogs_sbi_session_t       *session;
+} ogs_sbi_stream_t;
+
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
 static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
-static int submit_rst_stream(ogs_sbi_session_t *sbi_sess,
-        ogs_sbi_request_t *request, uint32_t error_code);
+static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code);
 static int session_send(ogs_sbi_session_t *sbi_sess);
 
 static void session_write_to_buffer(
@@ -132,15 +140,65 @@ static void session_write_to_buffer(
 static void session_write_callback(short when, ogs_socket_t fd, void *data);
 
 static OGS_POOL(session_pool, ogs_sbi_session_t);
+static OGS_POOL(stream_pool, ogs_sbi_stream_t);
 
 static void server_init(int num_of_stream_pool)
 {
     ogs_pool_init(&session_pool, num_of_stream_pool);
+    ogs_pool_init(&stream_pool, num_of_stream_pool);
 }
 
 static void server_final(void)
 {
+    ogs_pool_final(&stream_pool);
     ogs_pool_final(&session_pool);
+}
+
+static ogs_sbi_stream_t *stream_add(
+        ogs_sbi_session_t *sbi_sess, int32_t stream_id)
+{
+    ogs_sbi_stream_t *stream = NULL;
+
+    ogs_assert(sbi_sess);
+
+    ogs_pool_alloc(&stream_pool, &stream);
+    ogs_assert(stream);
+    memset(stream, 0, sizeof(ogs_sbi_stream_t));
+
+    stream->request = ogs_sbi_request_new();
+    ogs_assert(stream->request);
+
+    stream->stream_id = stream_id;
+
+    stream->session = sbi_sess;
+
+    return stream;
+}
+
+static void stream_remove(ogs_sbi_stream_t *stream)
+{
+    ogs_sbi_session_t *sbi_sess = NULL;
+
+    ogs_assert(stream);
+    sbi_sess = stream->session;
+    ogs_assert(sbi_sess);
+
+    ogs_list_remove(&sbi_sess->stream_list, stream);
+
+    ogs_assert(stream->request);
+    ogs_sbi_request_free(stream->request);
+
+    ogs_pool_free(&stream_pool, stream);
+}
+
+static void stream_remove_all(ogs_sbi_session_t *sbi_sess)
+{
+    ogs_sbi_stream_t *stream = NULL, *next_stream = NULL;
+
+    ogs_assert(sbi_sess);
+
+    ogs_list_for_each_safe(&sbi_sess->stream_list, next_stream, stream)
+        stream_remove(stream);
 }
 
 static ogs_sbi_session_t *session_add(
@@ -177,7 +235,6 @@ static ogs_sbi_session_t *session_add(
 static void session_remove(ogs_sbi_session_t *sbi_sess)
 {
     ogs_sbi_server_t *server = NULL;
-    ogs_sbi_request_t *request = NULL, *next_request = NULL;
     ogs_poll_t *poll = NULL;
     ogs_pkbuf_t *pkbuf = NULL, *next_pkbuf = NULL;
 
@@ -190,10 +247,7 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
     ogs_assert(sbi_sess->timer);
     ogs_timer_delete(sbi_sess->timer);
 
-    ogs_list_for_each_safe(&sbi_sess->stream_list, next_request, request) {
-        ogs_list_remove(&sbi_sess->stream_list, request);
-        ogs_sbi_request_free(request);
-    }
+    stream_remove_all(sbi_sess);
 
     poll = ogs_pollset_cycle(ogs_app()->pollset, sbi_sess->poll.read);
     ogs_assert(poll);
@@ -491,12 +545,15 @@ static void server_send_response(
 #endif
 
     ogs_sbi_response_free(response);
+    stream_remove(stream);
 }
 
 static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
 {
-    ogs_sbi_session_t *sbi_sess = (ogs_sbi_session_t *)stream;
+    ogs_sbi_session_t *sbi_sess = NULL;
 
+    ogs_assert(stream);
+    sbi_sess = stream->session;
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->server);
 
@@ -562,6 +619,7 @@ static int on_frame_recv_callback(nghttp2_session *session,
     ogs_sbi_session_t *sbi_sess = user_data;
 
     ogs_sbi_server_t *server = NULL;
+    ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(sbi_sess);
@@ -573,20 +631,22 @@ static int on_frame_recv_callback(nghttp2_session *session,
     case NGHTTP2_HEADERS:
         /* Check that the client request has finished */
         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-            request = nghttp2_session_get_stream_user_data(
+            stream = nghttp2_session_get_stream_user_data(
                             session, frame->hd.stream_id);
 
             /* For DATA and HEADERS frame, this callback may be called after
             on_stream_close_callback. Check that stream still alive. */
-            if (!request) {
+            if (!stream) {
                 return 0;
             }
 
-#if 0
+            request = stream->request;
+            ogs_assert(request);
+
             if (server->cb) {
-                if (server->cb(request, sbi_sess) != OGS_OK) {
+                if (server->cb(request, stream) != OGS_OK) {
                     ogs_warn("server callback error");
-                    ogs_sbi_server_send_error(sbi_sess,
+                    ogs_sbi_server_send_error(stream,
                             OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
                             "server callback error", NULL);
 
@@ -596,7 +656,6 @@ static int on_frame_recv_callback(nghttp2_session *session,
                 ogs_fatal("server callback is not registered");
                 ogs_assert_if_reached();
             }
-#endif
 
             break;
         }
@@ -611,18 +670,16 @@ static int on_frame_recv_callback(nghttp2_session *session,
 static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
                                     uint32_t error_code, void *user_data)
 {
-    ogs_sbi_session_t *sbi_sess = user_data;
-    ogs_sbi_request_t *request = NULL;
+    ogs_sbi_stream_t *stream = NULL;
 
     (void)error_code;
 
-    request = nghttp2_session_get_stream_user_data(session, stream_id);
-    if (!request) {
+    stream = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (!stream) {
         return 0;
     }
 
-    ogs_list_remove(&sbi_sess->stream_list, request);
-    ogs_sbi_request_free(request);
+    stream_remove(stream);
 
     return 0;
 }
@@ -633,6 +690,7 @@ static int on_header_callback2(nghttp2_session *session,
                                uint8_t flags, void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_request_t *request = NULL;
 
     const char PATH[] = ":path";
@@ -652,11 +710,13 @@ static int on_header_callback2(nghttp2_session *session,
         return 0;
     }
 
-    request = nghttp2_session_get_stream_user_data(
-            session, frame->hd.stream_id);
-    if (!request) {
+    stream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    if (!stream) {
         return 0;
     }
+
+    request = stream->request;
+    ogs_assert(request);
 
     ogs_assert(name);
     namebuf = nghttp2_rcbuf_get_buf(name);
@@ -752,8 +812,7 @@ static int on_header_callback2(nghttp2_session *session,
     return 0;
 
 cleanup:
-    if (submit_rst_stream(
-                sbi_sess, request, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
+    if (submit_rst_stream(stream, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
         ogs_error("submit_rst_stream() failed");
         session_remove(sbi_sess);
         return 0;
@@ -776,14 +835,18 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
                                        size_t len, void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_request_t *request = NULL;
 
     ogs_assert(sbi_sess);
 
-    request = nghttp2_session_get_stream_user_data(session, stream_id);
-    if (!request) {
+    stream = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (!stream) {
         return 0;
     }
+
+    request = stream->request;
+    ogs_assert(request);
 
     ogs_assert(data);
     ogs_assert(len);
@@ -802,7 +865,7 @@ static int on_begin_headers_callback(nghttp2_session *session,
                                      void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
-    ogs_sbi_request_t *request = NULL;
+    ogs_sbi_stream_t *stream = NULL;
 
     ogs_assert(sbi_sess);
     ogs_assert(session);
@@ -813,14 +876,10 @@ static int on_begin_headers_callback(nghttp2_session *session,
         return 0;
     }
 
-    request = ogs_sbi_request_new();
-    ogs_assert(request);
-    request->stream_id = frame->hd.stream_id;
+    stream = stream_add(sbi_sess, frame->hd.stream_id);
+    ogs_assert(stream);
 
-    ogs_list_add(&sbi_sess->stream_list, request);
-
-    nghttp2_session_set_stream_user_data(
-            session, frame->hd.stream_id, request);
+    nghttp2_session_set_stream_user_data(session, frame->hd.stream_id, stream);
 
     return 0;
 }
@@ -874,16 +933,16 @@ static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
     return OGS_OK;
 }
 
-static int submit_rst_stream(ogs_sbi_session_t *sbi_sess,
-        ogs_sbi_request_t *request, uint32_t error_code)
+static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code)
 {
-    ogs_assert(sbi_sess);
-    ogs_assert(request);
+    ogs_sbi_session_t *sbi_sess = NULL;
 
-    ogs_timer_stop(sbi_sess->timer);
+    ogs_assert(stream);
+    sbi_sess = stream->session;
+    ogs_assert(sbi_sess);
 
     return nghttp2_submit_rst_stream(sbi_sess->session, NGHTTP2_FLAG_NONE,
-            request->stream_id, error_code);
+            stream->stream_id, error_code);
 }
 
 /* Serialize the frame and send (or buffer) the data to buffer. */
