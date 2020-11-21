@@ -215,6 +215,25 @@ static void add_header(nghttp2_nv *nv, const char *key, const char *value)
     nv->flags = NGHTTP2_NV_FLAG_NONE;
 }
 
+static ssize_t response_read_cb(
+        nghttp2_session *session, int32_t stream_id,
+        uint8_t *buf, size_t length, uint32_t *data_flags,
+        nghttp2_data_source *source, void *user_data)
+{
+    ogs_sbi_response_t *response = NULL;
+
+    ogs_assert(source);
+    response = source->ptr;
+
+    ogs_assert(response);
+    ogs_assert(response->http.content);
+    ogs_assert(response->http.content_length);
+    memcpy(buf, response->http.content, response->http.content_length);
+
+    *data_flags |= NGHTTP2_DATA_FLAG_EOF;
+
+    return response->http.content_length;
+}
 static void server_send_response(
         ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
@@ -224,6 +243,7 @@ static void server_send_response(
     size_t nvlen;
     int i;
     char date[128];
+    char clen[32];
 
     ogs_assert(stream);
     sbi_sess = stream->session;
@@ -235,10 +255,8 @@ static void server_send_response(
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
-#if 0
     if (response->http.content && response->http.content_length)
         nvlen++;
-#endif
 
     nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
     ogs_assert(nva);
@@ -251,10 +269,10 @@ static void server_send_response(
     get_date_string(date, sizeof (date), "", "");
     add_header(&nva[i++], "date", date);
 
-    if (response->http.content) {
-        ogs_fatal("content = %s", response->http.content);
-    } else {
-        ogs_fatal("no content");
+    if (response->http.content && response->http.content_length) {
+        ogs_snprintf(clen, sizeof(clen),
+                "%d", (int)response->http.content_length);
+        add_header(&nva[i++], "content-length", clen);
     }
 
     for (hi = ogs_hash_first(response->http.headers);
@@ -262,8 +280,18 @@ static void server_send_response(
         add_header(&nva[i++], ogs_hash_this_key(hi), ogs_hash_this_val(hi));
     }
 
-	nghttp2_submit_response(sbi_sess->session,
-            stream->stream_id, nva, nvlen, NULL);
+    if (response->http.content && response->http.content_length) {
+        nghttp2_data_provider data_prd;
+
+        data_prd.source.ptr = response;
+        data_prd.read_callback = response_read_cb;
+
+        nghttp2_submit_response(sbi_sess->session,
+                stream->stream_id, nva, nvlen, &data_prd);
+    } else {
+        nghttp2_submit_response(sbi_sess->session,
+                stream->stream_id, nva, nvlen, NULL);
+    }
 
     ogs_sbi_response_free(response);
 
