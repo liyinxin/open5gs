@@ -231,11 +231,11 @@ static void server_send_response(
     ogs_assert(response);
 
     nvlen = 2; /* :status && date */
-#if 0
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
         nvlen++;
 
+#if 0
     if (response->http.content && response->http.content_length)
         nvlen++;
 #endif
@@ -251,7 +251,6 @@ static void server_send_response(
     get_date_string(date, sizeof (date), "", "");
     add_header(&nva[i++], "date", date);
 
-#if 0
     if (response->http.content) {
         ogs_fatal("content = %s", response->http.content);
     } else {
@@ -260,11 +259,8 @@ static void server_send_response(
 
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi)) {
-        const char *key = ogs_hash_this_key(hi);
-        char *val = ogs_hash_this_val(hi);
-        ogs_fatal("K,V = %s, %s", key, val);
+        add_header(&nva[i++], ogs_hash_this_key(hi), ogs_hash_this_val(hi));
     }
-#endif
 
 	nghttp2_submit_response(sbi_sess->session,
             stream->stream_id, nva, nvlen, NULL);
