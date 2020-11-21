@@ -294,10 +294,7 @@ static void server_send_response(
                 stream->stream_id, nva, nvlen, NULL);
     }
 
-    if (session_send(sbi_sess) != OGS_OK) {
-        ogs_error("session_send() failed");
-        session_remove(sbi_sess);
-    }
+    session_send(sbi_sess);
 
     ogs_sbi_response_free(response);
     ogs_free(nva);
@@ -494,11 +491,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
         return;
     }
 
-    if (session_send(sbi_sess) != OGS_OK) {
-        ogs_error("session_send() failed");
-        session_remove(sbi_sess);
-        return;
-    }
+    session_send(sbi_sess);
 }
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
@@ -806,11 +799,7 @@ cleanup:
         return 0;
     }
 
-    if (session_send(sbi_sess) != OGS_OK) {
-        ogs_error("session_send() failed");
-        session_remove(sbi_sess);
-        return 0;
-    }
+    session_send(sbi_sess);
 
     if (namestr) ogs_free(namestr);
     if (valuestr) ogs_free(valuestr);
