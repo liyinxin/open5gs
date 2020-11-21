@@ -234,6 +234,7 @@ static ssize_t response_read_cb(
 
     return response->http.content_length;
 }
+
 static void server_send_response(
         ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
 {
@@ -252,6 +253,7 @@ static void server_send_response(
 
     nvlen = 2; /* :status && date */
 
+#define NO_DATA 1
 #ifndef NO_DATA
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
@@ -656,7 +658,6 @@ static int on_frame_recv_callback(nghttp2_session *session,
     return 0;
 }
 
-
 static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
                                     uint32_t error_code, void *user_data)
 {
@@ -904,7 +905,6 @@ static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code)
             stream->stream_id, error_code);
 }
 
-/* Serialize the frame and send (or buffer) the data to buffer. */
 static int session_send(ogs_sbi_session_t *sbi_sess)
 {
     int rv;
