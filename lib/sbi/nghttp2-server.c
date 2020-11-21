@@ -24,6 +24,77 @@
 #include <netinet/tcp.h>
 #include <nghttp2/nghttp2.h>
 
+static void server_init(int num_of_stream_pool);
+static void server_final(void);
+
+static void server_start(ogs_sbi_server_t *server,
+        int (*cb)(ogs_sbi_request_t *request, void *data));
+static void server_stop(ogs_sbi_server_t *server);
+
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
+
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *data);
+
+const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
+    server_init,
+    server_final,
+
+    server_start,
+    server_stop,
+
+    server_send_response,
+    server_from_stream,
+};
+
+typedef struct ogs_sbi_session_s {
+    ogs_lnode_t             lnode;
+
+    ogs_sock_t              *sock;
+    ogs_sockaddr_t          *addr;
+    struct {
+        ogs_poll_t          *read;
+        ogs_poll_t          *write;
+    } poll;
+
+    nghttp2_session         *session;
+    ogs_list_t              write_queue;
+
+    ogs_sbi_server_t        *server;
+    ogs_list_t              stream_list;
+
+    ogs_timer_t             *timer;
+
+    void *data;
+} ogs_sbi_session_t;
+
+typedef struct ogs_sbi_stream_s {
+    ogs_lnode_t             lnode;
+
+    int32_t                 stream_id;
+    ogs_sbi_request_t       *request;
+
+    ogs_sbi_session_t       *session;
+} ogs_sbi_stream_t;
+
+static void session_remove(ogs_sbi_session_t *sbi_sess);
+static void session_remove_all(ogs_sbi_server_t *server);
+static void session_timer_expired(void *data);
+
+static void stream_remove(ogs_sbi_stream_t *stream);
+
+static void accept_handler(short when, ogs_socket_t fd, void *data);
+static void recv_handler(short when, ogs_socket_t fd, void *data);
+
+static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
+static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
+static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code);
+static int session_send(ogs_sbi_session_t *sbi_sess);
+
+static void session_write_to_buffer(
+        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
+static void session_write_callback(short when, ogs_socket_t fd, void *data);
+
 static char status_string[600][4] = {
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
  "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "",
@@ -70,72 +141,9 @@ static ogs_sbi_pseudo_header_t pseudo_headers[] = {
     { .name = ":path",      .len = 5  },
 };
 
-static void server_init(int num_of_stream_pool);
-static void server_final(void);
-
-static void server_start(ogs_sbi_server_t *server,
-        int (*cb)(ogs_sbi_request_t *request, void *data));
-static void server_stop(ogs_sbi_server_t *server);
-
-static void server_send_response(
-        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response);
-
-static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *data);
-
-const ogs_sbi_server_actions_t ogs_nghttp2_server_actions = {
-    server_init,
-    server_final,
-
-    server_start,
-    server_stop,
-
-    server_send_response,
-    server_from_stream,
-};
-
-static void accept_handler(short when, ogs_socket_t fd, void *data);
-static void recv_handler(short when, ogs_socket_t fd, void *data);
-
-static void session_timer_expired(void *data);
-
-typedef struct ogs_sbi_session_s {
-    ogs_lnode_t             lnode;
-
-    ogs_sock_t              *sock;
-    ogs_sockaddr_t          *addr;
-    struct {
-        ogs_poll_t          *read;
-        ogs_poll_t          *write;
-    } poll;
-
-    nghttp2_session         *session;
-    ogs_list_t              write_queue;
-
-    ogs_sbi_server_t        *server;
-    ogs_list_t              stream_list;
-
-    ogs_timer_t             *timer;
-
-    void *data;
-} ogs_sbi_session_t;
-
-typedef struct ogs_sbi_stream_s {
-    ogs_lnode_t             lnode;
-
-    int32_t                 stream_id;
-    ogs_sbi_request_t       *request;
-
-    ogs_sbi_session_t       *session;
-} ogs_sbi_stream_t;
-
-static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
-static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
-static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code);
-static int session_send(ogs_sbi_session_t *sbi_sess);
-
-static void session_write_to_buffer(
-        ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
-static void session_write_callback(short when, ogs_socket_t fd, void *data);
+static void get_date_string(
+    char *date, size_t date_len,
+    const char *header, const char *end_of_line);
 
 static OGS_POOL(session_pool, ogs_sbi_session_t);
 static OGS_POOL(stream_pool, ogs_sbi_stream_t);
@@ -150,6 +158,138 @@ static void server_final(void)
 {
     ogs_pool_final(&stream_pool);
     ogs_pool_final(&session_pool);
+}
+
+static void server_start(ogs_sbi_server_t *server,
+        int (*cb)(ogs_sbi_request_t *request, void *data))
+{
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sock_t *sock = NULL;
+    ogs_sockaddr_t *addr = NULL;
+    char *hostname = NULL;
+
+    addr = server->node.addr;
+    ogs_assert(addr);
+
+    sock = ogs_tcp_server(&server->node);
+    if (!sock) {
+        ogs_error("Cannot start SBI server");
+        return;
+    }
+
+    /* Setup callback function */
+    server->cb = cb;
+
+    /* Setup poll for server listening socket */
+    server->node.poll = ogs_pollset_add(ogs_app()->pollset,
+            OGS_POLLIN, sock->fd, accept_handler, server);
+    ogs_assert(server->node.poll);
+
+    hostname = ogs_gethostname(addr);
+    if (hostname)
+        ogs_info("nghttp2_server() [%s]:%d", hostname, OGS_PORT(addr));
+    else
+        ogs_info("nghttp2_server() [%s]:%d",
+                OGS_ADDR(addr, buf), OGS_PORT(addr));
+}
+
+static void server_stop(ogs_sbi_server_t *server)
+{
+    ogs_assert(server);
+
+    if (server->node.poll)
+        ogs_pollset_remove(server->node.poll);
+
+    if (server->node.sock)
+        ogs_sock_destroy(server->node.sock);
+
+    session_remove_all(server);
+}
+
+static void add_header(nghttp2_nv *nv, const char *key, const char *value)
+{
+    nv->name = (uint8_t *)key;
+    nv->namelen = strlen (key);
+    nv->value = (uint8_t *)value;
+    nv->valuelen = strlen(value);
+    nv->flags = NGHTTP2_NV_FLAG_NONE;
+}
+
+static void server_send_response(
+        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
+{
+    ogs_sbi_session_t *sbi_sess = NULL;
+    ogs_hash_index_t *hi;
+    nghttp2_nv *nva;
+    size_t nvlen;
+    int i;
+    char date[128];
+
+    ogs_assert(stream);
+    sbi_sess = stream->session;
+    ogs_assert(sbi_sess);
+    ogs_assert(response);
+
+    nvlen = 2; /* :status && date */
+#if 0
+    for (hi = ogs_hash_first(response->http.headers);
+            hi; hi = ogs_hash_next(hi))
+        nvlen++;
+
+    if (response->http.content && response->http.content_length)
+        nvlen++;
+#endif
+
+    nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
+    ogs_assert(nva);
+
+    i = 0;
+
+    ogs_assert(response->status < 600);
+    add_header(&nva[i++], ":status", status_string[response->status]);
+
+    get_date_string(date, sizeof (date), "", "");
+    add_header(&nva[i++], "date", date);
+
+#if 0
+    if (response->http.content) {
+        ogs_fatal("content = %s", response->http.content);
+    } else {
+        ogs_fatal("no content");
+    }
+
+    for (hi = ogs_hash_first(response->http.headers);
+            hi; hi = ogs_hash_next(hi)) {
+        const char *key = ogs_hash_this_key(hi);
+        char *val = ogs_hash_this_val(hi);
+        ogs_fatal("K,V = %s, %s", key, val);
+    }
+#endif
+
+	nghttp2_submit_response(sbi_sess->session,
+            stream->stream_id, nva, nvlen, NULL);
+
+    ogs_sbi_response_free(response);
+
+    if (session_send(sbi_sess) != OGS_OK) {
+        ogs_error("session_send() failed");
+        session_remove(sbi_sess);
+        return;
+    }
+
+    stream_remove(stream);
+}
+
+static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
+{
+    ogs_sbi_session_t *sbi_sess = NULL;
+
+    ogs_assert(stream);
+    sbi_sess = stream->session;
+    ogs_assert(sbi_sess);
+    ogs_assert(sbi_sess->server);
+
+    return sbi_sess->server;
 }
 
 static ogs_sbi_stream_t *stream_add(
@@ -288,52 +428,6 @@ static void session_remove_all(ogs_sbi_server_t *server)
         session_remove(sbi_sess);
 }
 
-static void server_start(ogs_sbi_server_t *server,
-        int (*cb)(ogs_sbi_request_t *request, void *data))
-{
-    char buf[OGS_ADDRSTRLEN];
-    ogs_sock_t *sock = NULL;
-    ogs_sockaddr_t *addr = NULL;
-    char *hostname = NULL;
-
-    addr = server->node.addr;
-    ogs_assert(addr);
-
-    sock = ogs_tcp_server(&server->node);
-    if (!sock) {
-        ogs_error("Cannot start SBI server");
-        return;
-    }
-
-    /* Setup callback function */
-    server->cb = cb;
-
-    /* Setup poll for server listening socket */
-    server->node.poll = ogs_pollset_add(ogs_app()->pollset,
-            OGS_POLLIN, sock->fd, accept_handler, server);
-    ogs_assert(server->node.poll);
-
-    hostname = ogs_gethostname(addr);
-    if (hostname)
-        ogs_info("nghttp2_server() [%s]:%d", hostname, OGS_PORT(addr));
-    else
-        ogs_info("nghttp2_server() [%s]:%d",
-                OGS_ADDR(addr, buf), OGS_PORT(addr));
-}
-
-static void server_stop(ogs_sbi_server_t *server)
-{
-    ogs_assert(server);
-
-    if (server->node.poll)
-        ogs_pollset_remove(server->node.poll);
-
-    if (server->node.sock)
-        ogs_sock_destroy(server->node.sock);
-
-    session_remove_all(server);
-}
-
 static void accept_handler(short when, ogs_socket_t fd, void *data)
 {
     ogs_sbi_server_t *server = data;
@@ -429,143 +523,6 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
     }
 
     ogs_pkbuf_free(pkbuf);
-}
-
-static void add_header(nghttp2_nv *nv, const char *key, const char *value)
-{
-    nv->name = (uint8_t *)key;
-    nv->namelen = strlen (key);
-    nv->value = (uint8_t *)value;
-    nv->valuelen = strlen(value);
-    nv->flags = NGHTTP2_NV_FLAG_NONE;
-}
-
-static void get_date_string (char *date,
-		 size_t date_len,
-		 const char *header, const char *end_of_line)
-{
-  static const char *const days[] = {
-    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
-  };
-  static const char *const mons[] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-  };
-  struct tm now;
-  time_t t;
-#if !defined(HAVE_C11_GMTIME_S) && !defined(HAVE_W32_GMTIME_S) && !defined(HAVE_GMTIME_R)
-  struct tm* pNow;
-#endif
-
-  date[0] = 0;
-  time (&t);
-#if defined(HAVE_C11_GMTIME_S)
-  if (NULL == gmtime_s (&t,
-                        &now))
-    return;
-#elif defined(HAVE_W32_GMTIME_S)
-  if (0 != gmtime_s (&now,
-                     &t))
-    return;
-#elif defined(HAVE_GMTIME_R)
-  if (NULL == gmtime_r(&t,
-                       &now))
-    return;
-#else
-  pNow = gmtime(&t);
-  if (NULL == pNow)
-    return;
-  now = *pNow;
-#endif
-  ogs_snprintf (date,
-		 date_len,
-		 "%s%3s, %02u %3s %04u %02u:%02u:%02u GMT%s",
-		 header,
-		 days[now.tm_wday % 7],
-		 (unsigned int) now.tm_mday,
-		 mons[now.tm_mon % 12],
-		 (unsigned int) (1900 + now.tm_year),
-		 (unsigned int) now.tm_hour,
-		 (unsigned int) now.tm_min,
-		 (unsigned int) now.tm_sec,
-		 end_of_line);
-}
-
-static void server_send_response(
-        ogs_sbi_stream_t *stream, ogs_sbi_response_t *response)
-{
-    ogs_sbi_session_t *sbi_sess = NULL;
-    ogs_hash_index_t *hi;
-    nghttp2_nv *nva;
-    size_t nvlen;
-    int i;
-    char date[128];
-
-    ogs_assert(stream);
-    sbi_sess = stream->session;
-    ogs_assert(sbi_sess);
-    ogs_assert(response);
-
-    nvlen = 2; /* :status && date */
-#if 0
-    for (hi = ogs_hash_first(response->http.headers);
-            hi; hi = ogs_hash_next(hi))
-        nvlen++;
-
-    if (response->http.content && response->http.content_length)
-        nvlen++;
-#endif
-
-    nva = ogs_calloc(nvlen, sizeof(nghttp2_nv));
-    ogs_assert(nva);
-
-    i = 0;
-
-    ogs_assert(response->status < 600);
-    add_header(&nva[i++], ":status", status_string[response->status]);
-
-    get_date_string(date, sizeof (date), "", "");
-    add_header(&nva[i++], "date", date);
-
-#if 0
-    if (response->http.content) {
-        ogs_fatal("content = %s", response->http.content);
-    } else {
-        ogs_fatal("no content");
-    }
-
-    for (hi = ogs_hash_first(response->http.headers);
-            hi; hi = ogs_hash_next(hi)) {
-        const char *key = ogs_hash_this_key(hi);
-        char *val = ogs_hash_this_val(hi);
-        ogs_fatal("K,V = %s, %s", key, val);
-    }
-#endif
-
-	nghttp2_submit_response(sbi_sess->session,
-            stream->stream_id, nva, nvlen, NULL);
-
-    ogs_sbi_response_free(response);
-
-    if (session_send(sbi_sess) != OGS_OK) {
-        ogs_error("session_send() failed");
-        session_remove(sbi_sess);
-        return;
-    }
-
-    stream_remove(stream);
-}
-
-static ogs_sbi_server_t *server_from_stream(ogs_sbi_stream_t *stream)
-{
-    ogs_sbi_session_t *sbi_sess = NULL;
-
-    ogs_assert(stream);
-    sbi_sess = stream->session;
-    ogs_assert(sbi_sess);
-    ogs_assert(sbi_sess->server);
-
-    return sbi_sess->server;
 }
 
 static int on_frame_recv_callback(nghttp2_session *session,
@@ -1013,4 +970,31 @@ static void session_write_callback(short when, ogs_socket_t fd, void *data)
 
     ogs_send(fd, pkbuf->data, pkbuf->len, 0);
     ogs_pkbuf_free(pkbuf);
+}
+
+static void get_date_string(
+    char *date, size_t date_len,
+    const char *header, const char *end_of_line)
+{
+    static const char *const days[] = {
+        "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+    };
+    static const char *const mons[] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    };
+
+    struct tm tm;
+    ogs_gmtime(ogs_time_sec(ogs_time_now()), &tm);
+
+    ogs_snprintf(date, date_len, "%s%3s, %02u %3s %04u %02u:%02u:%02u GMT%s",
+        header,
+        days[tm.tm_wday % 7],
+        (unsigned int)tm.tm_mday,
+        mons[tm.tm_mon % 12],
+        (unsigned int)(1900 + tm.tm_year),
+        (unsigned int)tm.tm_hour,
+        (unsigned int)tm.tm_min,
+        (unsigned int)tm.tm_sec,
+        end_of_line);
 }
