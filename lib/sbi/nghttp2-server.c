@@ -170,7 +170,7 @@ static void server_stop(ogs_sbi_server_t *server)
 static void add_header(nghttp2_nv *nv, const char *key, const char *value)
 {
     nv->name = (uint8_t *)key;
-    nv->namelen = strlen (key);
+    nv->namelen = strlen(key);
     nv->value = (uint8_t *)value;
     nv->valuelen = strlen(value);
     nv->flags = NGHTTP2_NV_FLAG_NONE;
