@@ -584,10 +584,17 @@ static int on_header_callback2(nghttp2_session *session,
 static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
                                        int32_t stream_id, const uint8_t *data,
                                        size_t len, void *user_data);
-static int on_invalid_frame_recv_callback(nghttp2_session *session,
-            const nghttp2_frame *frame, int error_code, void *user_data);
 static int error_callback(nghttp2_session *session,
             const char *msg, size_t len, void *user_data);
+static int on_invalid_frame_recv_callback(nghttp2_session *session,
+            const nghttp2_frame *frame, int error_code, void *user_data);
+static int on_invalid_header_callback(
+        nghttp2_session *session, const nghttp2_frame *frame,
+        const uint8_t *name, size_t namelen,
+        const uint8_t *value, size_t valuelen,
+        uint8_t flags, void *user_data);
+static int on_begin_frame_callback(nghttp2_session *session,
+        const nghttp2_frame_hd *hd, void *user_data);
 static int on_begin_headers_callback(nghttp2_session *session,
                                      const nghttp2_frame *frame,
                                      void *user_data);
@@ -621,11 +628,17 @@ static int session_set_callbacks(ogs_sbi_session_t *sbi_sess)
     nghttp2_session_callbacks_set_on_data_chunk_recv_callback(
             callbacks, on_data_chunk_recv_callback);
 
+    nghttp2_session_callbacks_set_error_callback(
+            callbacks, error_callback);
+
     nghttp2_session_callbacks_set_on_invalid_frame_recv_callback(
             callbacks, on_invalid_frame_recv_callback);
 
-    nghttp2_session_callbacks_set_error_callback(
-            callbacks, error_callback);
+    nghttp2_session_callbacks_set_on_invalid_header_callback(
+            callbacks, on_invalid_header_callback);
+
+    nghttp2_session_callbacks_set_on_begin_frame_callback(
+            callbacks, on_begin_frame_callback);
 
     nghttp2_session_callbacks_set_on_begin_headers_callback(
             callbacks, on_begin_headers_callback);
@@ -752,11 +765,6 @@ static int on_header_callback2(nghttp2_session *session,
     ogs_assert(session);
     ogs_assert(frame);
 
-    if (frame->hd.type != NGHTTP2_HEADERS ||
-        frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
-        return 0;
-    }
-
     stream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
     if (!stream) {
         ogs_error("no stream [%d]", frame->hd.stream_id);
@@ -847,8 +855,8 @@ static int on_header_callback2(nghttp2_session *session,
         ogs_sbi_header_set(request->http.headers, namestr, valuestr);
     }
 
-    if (namestr) ogs_free(namestr);
-    if (valuestr) ogs_free(valuestr);
+    ogs_free(namestr);
+    ogs_free(valuestr);
 
     return 0;
 }
@@ -882,25 +890,6 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
     return 0;
 }
 
-static int on_invalid_frame_recv_callback(nghttp2_session *session,
-			  const nghttp2_frame *frame, int error_code, void *user_data)
-{
-    char buf[OGS_ADDRSTRLEN];
-    ogs_sockaddr_t *addr = NULL;
-
-    ogs_sbi_session_t *sbi_sess = user_data;
-
-    ogs_assert(sbi_sess);
-    addr = sbi_sess->addr;
-    ogs_assert(addr);
-
-    ogs_error("[%s]:%d Invalid frame (%d:%s)",
-            OGS_ADDR(addr, buf), OGS_PORT(addr),
-            error_code, nghttp2_strerror(error_code));
-    return 0;
-}
-
-
 static int error_callback(nghttp2_session *session,
         const char *msg, size_t len, void *user_data)
 {
@@ -916,6 +905,79 @@ static int error_callback(nghttp2_session *session,
 
     ogs_error("[%s]:%d msg(%d) %s",
             OGS_ADDR(addr, buf), OGS_PORT(addr), (int)len, msg);
+
+    return 0;
+}
+
+static int on_invalid_frame_recv_callback(nghttp2_session *session,
+			  const nghttp2_frame *frame, int error_code, void *user_data)
+{
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sockaddr_t *addr = NULL;
+
+    ogs_sbi_session_t *sbi_sess = user_data;
+
+    ogs_assert(sbi_sess);
+    addr = sbi_sess->addr;
+    ogs_assert(addr);
+
+    ogs_error("[%s]:%d invalid frame (%d:%s)",
+            OGS_ADDR(addr, buf), OGS_PORT(addr),
+            error_code, nghttp2_strerror(error_code));
+    return 0;
+}
+
+static int on_invalid_header_callback(
+        nghttp2_session *session, const nghttp2_frame *frame,
+        const uint8_t *name, size_t namelen,
+        const uint8_t *value, size_t valuelen,
+        uint8_t flags, void *user_data)
+{
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sockaddr_t *addr = NULL;
+    char *namestr = NULL, *valuestr = NULL;
+
+    ogs_sbi_session_t *sbi_sess = user_data;
+
+    ogs_assert(sbi_sess);
+    addr = sbi_sess->addr;
+    ogs_assert(addr);
+
+    namestr = ogs_strndup((const char *)name, namelen);
+    ogs_assert(namestr);
+
+    valuestr = ogs_strndup((const char *)value, valuelen);
+    ogs_assert(valuestr);
+
+    ogs_error("[%s]:%d invalid header (%s:%s)",
+            OGS_ADDR(addr, buf), OGS_PORT(addr), namestr, valuestr);
+
+    ogs_free(namestr);
+    ogs_free(valuestr);
+
+    return 0;
+}
+
+static int on_begin_frame_callback(nghttp2_session *session,
+        const nghttp2_frame_hd *hd, void *user_data)
+{
+    char buf[OGS_ADDRSTRLEN];
+    ogs_sockaddr_t *addr = NULL;
+    ogs_sbi_session_t *sbi_sess = user_data;
+
+    ogs_assert(sbi_sess);
+    addr = sbi_sess->addr;
+    ogs_assert(addr);
+
+    ogs_assert(hd);
+
+    if ((hd->type == NGHTTP2_HEADERS) &&
+        (hd->stream_id < sbi_sess->last_stream_id)) {
+        ogs_error("[%s]:%d invalid stream id(%d) >= last stream id(%d)",
+                OGS_ADDR(addr, buf), OGS_PORT(addr),
+                hd->stream_id, sbi_sess->last_stream_id);
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
 
     return 0;
 }
