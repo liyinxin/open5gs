@@ -1001,7 +1001,6 @@ static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code)
 static int session_send(ogs_sbi_session_t *sbi_sess)
 {
     ogs_pkbuf_t *pkbuf = NULL;
-    ssize_t total_bytes = 0;
 
     ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->session);
@@ -1012,8 +1011,8 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
 
         data_len = nghttp2_session_mem_send(sbi_sess->session, &data);
         if (data_len < 0) {
-            ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                    "nghttp2_session_mem_send() failed [%d]", (int)data_len);
+            ogs_error("nghttp2_session_mem_send() failed (%d:%s)",
+                        (int)data_len, nghttp2_strerror((int)data_len));
             return OGS_ERROR;
         }
 
@@ -1026,11 +1025,9 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
         ogs_pkbuf_put_data(pkbuf, data, data_len);
 
         session_write_to_buffer(sbi_sess, pkbuf);
-
-        total_bytes += data_len;
     }
 
-    return total_bytes;
+    return OGS_OK;
 }
 
 static void session_write_callback(short when, ogs_socket_t fd, void *data)
