@@ -89,11 +89,10 @@ static void recv_handler(short when, ogs_socket_t fd, void *data);
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
 static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
 static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code);
-static int session_send(ogs_sbi_session_t *sbi_sess);
 
+static int session_send(ogs_sbi_session_t *sbi_sess);
 static void session_write_to_buffer(
         ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
-static void session_write_callback(short when, ogs_socket_t fd, void *data);
 
 typedef struct ogs_sbi_pseudo_header_s {
     const char *name;
@@ -489,7 +488,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
 
     new = ogs_sock_accept(sock);
     if (!new) {
-        ogs_error("ogs_sock_accept() failed");
+        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno, "accept() failed");
         return;
     }
     ogs_assert(new->fd != INVALID_SOCKET);
@@ -497,7 +496,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
     on = 1;
     if (setsockopt(new->fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) != 0) {
         ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "setsockopt for SCTP_NODELAY failed");
+                "setsockopt() for SCTP_NODELAY failed");
         return;
     }
 
@@ -1000,6 +999,27 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
     return total_bytes;
 }
 
+static void session_write_callback(short when, ogs_socket_t fd, void *data)
+{
+    ogs_sbi_session_t *sbi_sess = data;
+    ogs_pkbuf_t *pkbuf = NULL;
+
+    ogs_assert(sbi_sess);
+
+    if (ogs_list_empty(&sbi_sess->write_queue) == true) {
+        ogs_assert(sbi_sess->poll.write);
+        ogs_pollset_remove(sbi_sess->poll.write);
+        return;
+    }
+
+    pkbuf = ogs_list_first(&sbi_sess->write_queue);
+    ogs_assert(pkbuf);
+    ogs_list_remove(&sbi_sess->write_queue, pkbuf);
+
+    ogs_send(fd, pkbuf->data, pkbuf->len, 0);
+    ogs_pkbuf_free(pkbuf);
+}
+
 static void session_write_to_buffer(
         ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf)
 {
@@ -1022,25 +1042,4 @@ static void session_write_to_buffer(
     if (!poll)
         sbi_sess->poll.write = ogs_pollset_add(ogs_app()->pollset,
             OGS_POLLOUT, fd, session_write_callback, sbi_sess);
-}
-
-static void session_write_callback(short when, ogs_socket_t fd, void *data)
-{
-    ogs_sbi_session_t *sbi_sess = data;
-    ogs_pkbuf_t *pkbuf = NULL;
-
-    ogs_assert(sbi_sess);
-
-    if (ogs_list_empty(&sbi_sess->write_queue) == true) {
-        ogs_assert(sbi_sess->poll.write);
-        ogs_pollset_remove(sbi_sess->poll.write);
-        return;
-    }
-
-    pkbuf = ogs_list_first(&sbi_sess->write_queue);
-    ogs_assert(pkbuf);
-    ogs_list_remove(&sbi_sess->write_queue, pkbuf);
-
-    ogs_send(fd, pkbuf->data, pkbuf->len, 0);
-    ogs_pkbuf_free(pkbuf);
 }

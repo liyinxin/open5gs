@@ -173,7 +173,6 @@ ogs_sock_t *ogs_sock_accept(ogs_sock_t *sock)
 
     new_fd = accept(sock->fd, &addr.sa, &addrlen);
     if (new_fd < 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno, "accept failed");
         return NULL;
     }
 
@@ -185,7 +184,7 @@ ogs_sock_t *ogs_sock_accept(ogs_sock_t *sock)
 
     memcpy(&new_sock->remote_addr, &addr, sizeof(new_sock->remote_addr));
 
-    return new_sock;;
+    return new_sock;
 }
 
 ssize_t ogs_write(ogs_socket_t fd, const void *buf, size_t len)
