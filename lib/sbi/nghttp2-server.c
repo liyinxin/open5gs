@@ -88,7 +88,6 @@ static void recv_handler(short when, ogs_socket_t fd, void *data);
 
 static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
 static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
-static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code);
 
 static int session_send(ogs_sbi_session_t *sbi_sess);
 static void session_write_to_buffer(
@@ -664,18 +663,14 @@ static int on_frame_recv_callback(nghttp2_session *session,
             server = sbi_sess->server;
             ogs_assert(server);
 
-            if (server->cb) {
-                if (server->cb(request, stream) != OGS_OK) {
-                    ogs_warn("server callback error");
-                    ogs_sbi_server_send_error(stream,
-                            OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
-                            "server callback error", NULL);
+            ogs_assert(server->cb);
+            if (server->cb(request, stream) != OGS_OK) {
+                ogs_warn("server callback error");
+                ogs_sbi_server_send_error(stream,
+                        OGS_SBI_HTTP_STATUS_INTERNAL_SERVER_ERROR, NULL,
+                        "server callback error", NULL);
 
-                    return 0;
-                }
-            } else {
-                ogs_fatal("server callback is not registered");
-                ogs_assert_if_reached();
+                return 0;
             }
 
             break;
@@ -758,16 +753,10 @@ static int on_header_callback2(nghttp2_session *session,
     ogs_assert(valuebuf.len);
 
     namestr = ogs_strndup((const char *)namebuf.base, namebuf.len);
-    if (!namestr) {
-        ogs_error("ogs_strndup() failed");
-        goto cleanup;
-    }
+    ogs_assert(namestr);
 
     valuestr = ogs_strndup((const char *)valuebuf.base, valuebuf.len);
-    if (!valuestr) {
-        ogs_error("ogs_strndup() failed");
-        goto cleanup;
-    }
+    ogs_assert(valuestr);
 
     if (namebuf.len == sizeof(PATH) - 1 &&
             memcmp(PATH, namebuf.base, namebuf.len) == 0) {
@@ -777,10 +766,7 @@ static int on_header_callback2(nghttp2_session *session,
         int j;
 
         request->h.uri = ogs_sbi_parse_uri(valuestr, "?", &saveptr);
-        if (!request->h.uri) {
-            ogs_error("ogs_sbi_parse_uri() failed");
-            goto cleanup;
-        }
+        ogs_assert(request->h.uri);
 
         memset(params, 0, sizeof(params));
 
@@ -834,20 +820,6 @@ static int on_header_callback2(nghttp2_session *session,
 
         ogs_sbi_header_set(request->http.headers, namestr, valuestr);
     }
-
-    if (namestr) ogs_free(namestr);
-    if (valuestr) ogs_free(valuestr);
-
-    return 0;
-
-cleanup:
-    if (submit_rst_stream(stream, NGHTTP2_INTERNAL_ERROR) != OGS_OK) {
-        ogs_error("submit_rst_stream() failed");
-        session_remove(sbi_sess);
-        return 0;
-    }
-
-    session_send(sbi_sess);
 
     if (namestr) ogs_free(namestr);
     if (valuestr) ogs_free(valuestr);
@@ -984,18 +956,6 @@ static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
     }
 
     return OGS_OK;
-}
-
-static int submit_rst_stream(ogs_sbi_stream_t *stream, uint32_t error_code)
-{
-    ogs_sbi_session_t *sbi_sess = NULL;
-
-    ogs_assert(stream);
-    sbi_sess = stream->session;
-    ogs_assert(sbi_sess);
-
-    return nghttp2_submit_rst_stream(sbi_sess->session, NGHTTP2_FLAG_NONE,
-            stream->stream_id, error_code);
 }
 
 static int session_send(ogs_sbi_session_t *sbi_sess)
