@@ -247,6 +247,7 @@ static ssize_t response_read_callback(
     ogs_sbi_stream_t *stream = NULL;
 
     ogs_assert(session);
+
     stream = nghttp2_session_get_stream_user_data(session, stream_id);
     if (!stream) {
         ogs_error("No stream [%d]", stream_id);
@@ -649,9 +650,8 @@ static int on_frame_recv_callback(nghttp2_session *session,
     ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_request_t *request = NULL;
 
-    ogs_assert(sbi_sess);
-    server = sbi_sess->server;
-    ogs_assert(server);
+    ogs_assert(session);
+    ogs_assert(frame);
 
     switch (frame->hd.type) {
     case NGHTTP2_DATA:
@@ -669,6 +669,10 @@ static int on_frame_recv_callback(nghttp2_session *session,
 
             request = stream->request;
             ogs_assert(request);
+
+            ogs_assert(sbi_sess);
+            server = sbi_sess->server;
+            ogs_assert(server);
 
             if (server->cb) {
                 if (server->cb(request, stream) != OGS_OK) {
@@ -699,8 +703,8 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
     ogs_sbi_stream_t *stream = NULL;
 
     ogs_assert(session);
-    stream = nghttp2_session_get_stream_user_data(session, stream_id);
 
+    stream = nghttp2_session_get_stream_user_data(session, stream_id);
     if (!stream) {
         return 0;
     }
@@ -735,7 +739,8 @@ static int on_header_callback2(nghttp2_session *session,
     nghttp2_vec namebuf, valuebuf;
     char *namestr = NULL, *valuestr = NULL;
 
-    ogs_assert(sbi_sess);
+    ogs_assert(session);
+    ogs_assert(frame);
 
     if (frame->hd.type != NGHTTP2_HEADERS ||
         frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
@@ -746,6 +751,8 @@ static int on_header_callback2(nghttp2_session *session,
     if (!stream) {
         return 0;
     }
+
+    ogs_assert(sbi_sess);
 
     request = stream->request;
     ogs_assert(request);
@@ -862,11 +869,10 @@ static int on_data_chunk_recv_callback(nghttp2_session *session, uint8_t flags,
                                        int32_t stream_id, const uint8_t *data,
                                        size_t len, void *user_data)
 {
-    ogs_sbi_session_t *sbi_sess = user_data;
     ogs_sbi_stream_t *stream = NULL;
     ogs_sbi_request_t *request = NULL;
 
-    ogs_assert(sbi_sess);
+    ogs_assert(session);
 
     stream = nghttp2_session_get_stream_user_data(session, stream_id);
     if (!stream) {
@@ -917,14 +923,22 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
                                  nghttp2_data_source *source, void *user_data)
 {
     ogs_sbi_session_t *sbi_sess = user_data;
+
     ogs_sbi_response_t *response = NULL;
+    ogs_sbi_stream_t *stream = NULL;
     ogs_pkbuf_t *pkbuf = NULL;
     size_t padlen = 0;
 
-    ogs_assert(sbi_sess);
+    ogs_assert(session);
     ogs_assert(frame);
-    ogs_assert(framehd);
-    ogs_assert(length);
+
+    stream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
+    if (!stream) {
+        ogs_error("No stream [%d]", frame->hd.stream_id);
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
+
+    ogs_assert(sbi_sess);
 
     ogs_assert(source);
     response = source->ptr;
@@ -932,6 +946,9 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
 
     ogs_assert(response->http.content);
     ogs_assert(response->http.content_length);
+
+    ogs_assert(framehd);
+    ogs_assert(length);
 
     pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
     ogs_assert(pkbuf);
