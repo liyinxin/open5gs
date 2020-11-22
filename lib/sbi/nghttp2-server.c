@@ -94,18 +94,6 @@ static int session_send(ogs_sbi_session_t *sbi_sess);
 static void session_write_to_buffer(
         ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
 
-typedef struct ogs_sbi_pseudo_header_s {
-    const char *name;
-    size_t len;
-} ogs_sbi_pseudo_header_t;
-
-static ogs_sbi_pseudo_header_t pseudo_headers[] = {
-    { .name = ":method",    .len = 7  },
-    { .name = ":scheme",    .len = 7  },
-    { .name = ":authority", .len = 10 },
-    { .name = ":path",      .len = 5  },
-};
-
 static OGS_POOL(session_pool, ogs_sbi_session_t);
 static OGS_POOL(stream_pool, ogs_sbi_stream_t);
 
@@ -250,7 +238,7 @@ static ssize_t response_read_callback(
 
     stream = nghttp2_session_get_stream_user_data(session, stream_id);
     if (!stream) {
-        ogs_error("No stream [%d]", stream_id);
+        ogs_error("no stream [%d]", stream_id);
         return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
 
@@ -287,6 +275,7 @@ static void server_send_response(
     ogs_assert(stream);
     sbi_sess = stream->session;
     ogs_assert(sbi_sess);
+    ogs_assert(sbi_sess->session);
     ogs_assert(response);
 
     nvlen = 2; /* :status && date */
@@ -328,19 +317,20 @@ static void server_send_response(
 
         rv = nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, &data_prd);
-        if (rv != OGS_OK)
-            ogs_error("nghttp2_submit_response() failed (%d:%s)",
-                        rv, nghttp2_strerror(rv));
     } else {
         rv = nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, NULL);
-        if (rv != OGS_OK)
-            ogs_error("nghttp2_submit_response() failed (%d:%s)",
-                        rv, nghttp2_strerror(rv));
     }
 
-    if (rv == OGS_OK)
-        session_send(sbi_sess);
+    if (rv != OGS_OK) {
+        ogs_error("nghttp2_submit_response(%d) failed (%d:%s)",
+                    (int)response->http.content_length,
+                    rv, nghttp2_strerror(rv));
+        nghttp2_submit_rst_stream(
+                sbi_sess->session, NGHTTP2_FLAG_NONE, stream->stream_id, rv);
+    }
+
+    session_send(sbi_sess);
 
     ogs_sbi_response_free(response);
     ogs_free(nva);
@@ -934,7 +924,7 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
 
     stream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
     if (!stream) {
-        ogs_error("No stream [%d]", frame->hd.stream_id);
+        ogs_error("no stream [%d]", frame->hd.stream_id);
         return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
     }
 
