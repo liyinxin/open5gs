@@ -244,6 +244,14 @@ static ssize_t response_read_callback(
         nghttp2_data_source *source, void *user_data)
 {
     ogs_sbi_response_t *response = NULL;
+    ogs_sbi_stream_t *stream = NULL;
+
+    ogs_assert(session);
+    stream = nghttp2_session_get_stream_user_data(session, stream_id);
+    if (!stream) {
+        ogs_error("No stream [%d]", stream_id);
+        return NGHTTP2_ERR_TEMPORAL_CALLBACK_FAILURE;
+    }
 
     ogs_assert(source);
     response = source->ptr;
@@ -255,6 +263,12 @@ static ssize_t response_read_callback(
     *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
 
+    if (nghttp2_session_get_stream_remote_close(session, stream_id) == 0) {
+        ogs_error("nghttp2_session_get_stream_remote_close() failed");
+        nghttp2_submit_rst_stream(
+                session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_NO_ERROR);
+    }
+
     return response->http.content_length;
 }
 
@@ -265,7 +279,7 @@ static void server_send_response(
     ogs_hash_index_t *hi;
     nghttp2_nv *nva;
     size_t nvlen;
-    int i;
+    int i, rv;
     char datebuf[DATE_STRLEN];
     char clen[32];
 
@@ -311,14 +325,21 @@ static void server_send_response(
         data_prd.source.ptr = response;
         data_prd.read_callback = response_read_callback;
 
-        nghttp2_submit_response(sbi_sess->session,
+        rv = nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, &data_prd);
+        if (rv != OGS_OK)
+            ogs_error("nghttp2_submit_response() failed (%d:%s)",
+                        rv, nghttp2_strerror(rv));
     } else {
-        nghttp2_submit_response(sbi_sess->session,
+        rv = nghttp2_submit_response(sbi_sess->session,
                 stream->stream_id, nva, nvlen, NULL);
+        if (rv != OGS_OK)
+            ogs_error("nghttp2_submit_response() failed (%d:%s)",
+                        rv, nghttp2_strerror(rv));
     }
 
-    session_send(sbi_sess);
+    if (rv == OGS_OK)
+        session_send(sbi_sess);
 
     ogs_sbi_response_free(response);
     ogs_free(nva);
@@ -544,8 +565,8 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
         readlen = nghttp2_session_mem_recv(
                 sbi_sess->session, pkbuf->data, pkbuf->len);
         if (readlen < 0) {
-            ogs_error("nghttp2_session_mem_recv() failed : %s",
-                nghttp2_strerror((int)readlen));
+            ogs_error("nghttp2_session_mem_recv() failed (%d:%s)",
+                        (int)readlen, nghttp2_strerror((int)readlen));
             session_remove(sbi_sess);
         }
     } else {
@@ -557,7 +578,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
                 "lost connection [%s]:%d", OGS_ADDR(addr, buf), OGS_PORT(addr));
         else if (n == 0)
             ogs_error("connection closed [%s]:%d",
-                    OGS_ADDR(addr, buf), OGS_PORT(addr));
+                        OGS_ADDR(addr, buf), OGS_PORT(addr));
 
         session_remove(sbi_sess);
     }
@@ -677,15 +698,21 @@ static int on_stream_close_callback(nghttp2_session *session, int32_t stream_id,
 {
     ogs_sbi_stream_t *stream = NULL;
 
-    (void)error_code;
-
+    ogs_assert(session);
     stream = nghttp2_session_get_stream_user_data(session, stream_id);
+
     if (!stream) {
         return 0;
     }
 
-    stream_remove(stream);
+    if (error_code) {
+        ogs_error("on_stream_close_callback() failed (%d:%s)",
+                    error_code, nghttp2_strerror(error_code));
+        nghttp2_submit_rst_stream(
+                session, NGHTTP2_FLAG_NONE, stream_id, error_code);
+    }
 
+    stream_remove(stream);
     return 0;
 }
 
@@ -944,8 +971,8 @@ static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
     rv = nghttp2_submit_settings(
             sbi_sess->session, NGHTTP2_FLAG_NONE, iv, OGS_ARRAY_SIZE(iv));
     if (rv != 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "nghttp2_submit_settings() failed [%d]", (int)rv);
+        ogs_error("nghttp2_submit_settings() failed (%d:%s)",
+                    rv, nghttp2_strerror(rv));
         return OGS_ERROR;
     }
 
