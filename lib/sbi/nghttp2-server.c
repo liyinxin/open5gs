@@ -765,6 +765,11 @@ static int on_header_callback2(nghttp2_session *session,
     ogs_assert(session);
     ogs_assert(frame);
 
+    if (frame->hd.type != NGHTTP2_HEADERS ||
+        frame->headers.cat != NGHTTP2_HCAT_REQUEST) {
+        return 0;
+    }
+
     stream = nghttp2_session_get_stream_user_data(session, frame->hd.stream_id);
     if (!stream) {
         ogs_error("no stream [%d]", frame->hd.stream_id);
@@ -903,7 +908,7 @@ static int error_callback(nghttp2_session *session,
 
     ogs_assert(msg);
 
-    ogs_error("[%s]:%d msg(%d) %s",
+    ogs_error("[%s]:%d msg%.*s",
             OGS_ADDR(addr, buf), OGS_PORT(addr), (int)len, msg);
 
     return 0;
