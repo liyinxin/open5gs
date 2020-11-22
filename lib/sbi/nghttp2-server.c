@@ -86,9 +86,8 @@ static void stream_remove(ogs_sbi_stream_t *stream);
 static void accept_handler(short when, ogs_socket_t fd, void *data);
 static void recv_handler(short when, ogs_socket_t fd, void *data);
 
-static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess);
-static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess);
-
+static int session_set_callbacks(ogs_sbi_session_t *sbi_sess);
+static int session_send_preface(ogs_sbi_session_t *sbi_sess);
 static int session_send(ogs_sbi_session_t *sbi_sess);
 static void session_write_to_buffer(
         ogs_sbi_session_t *sbi_sess, ogs_pkbuf_t *pkbuf);
@@ -518,15 +517,10 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
         OGS_POLLIN, new->fd, recv_handler, sbi_sess);
     ogs_assert(sbi_sess->poll.read);
 
-    initialize_nghttp2_session(sbi_sess);
-
-    if (submit_server_connection_header(sbi_sess) != OGS_OK) {
-        ogs_error("send_server_connection_header() failed");
+    if (session_set_callbacks(sbi_sess) != OGS_OK ||
+        session_send_preface(sbi_sess) != OGS_OK) {
         session_remove(sbi_sess);
-        return;
     }
-
-    session_send(sbi_sess);
 }
 
 static void recv_handler(short when, ogs_socket_t fd, void *data)
@@ -599,13 +593,19 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
                                  const uint8_t *framehd, size_t length,
                                  nghttp2_data_source *source, void *user_data);
 
-static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess)
+static int session_set_callbacks(ogs_sbi_session_t *sbi_sess)
 {
+    int rv;
     nghttp2_session_callbacks *callbacks = NULL;
 
     ogs_assert(sbi_sess);
 
-    nghttp2_session_callbacks_new(&callbacks);
+    rv = nghttp2_session_callbacks_new(&callbacks);
+    if (rv != 0) {
+        ogs_error("nghttp2_session_callbacks_new() failed (%d:%s)",
+                    rv, nghttp2_strerror(rv));
+        return OGS_ERROR;
+    }
 
     nghttp2_session_callbacks_set_on_frame_recv_callback(
             callbacks, on_frame_recv_callback);
@@ -625,9 +625,16 @@ static void initialize_nghttp2_session(ogs_sbi_session_t *sbi_sess)
     nghttp2_session_callbacks_set_send_data_callback(
             callbacks, on_send_data_callback);
 
-    nghttp2_session_server_new(&sbi_sess->session, callbacks, sbi_sess);
+    rv = nghttp2_session_server_new(&sbi_sess->session, callbacks, sbi_sess);
+    if (rv != 0) {
+        ogs_error("nghttp2_session_callbacks_new() failed (%d:%s)",
+                    rv, nghttp2_strerror(rv));
+        return OGS_ERROR;
+    }
 
     nghttp2_session_callbacks_del(callbacks);
+
+    return OGS_OK;
 }
 
 static int on_frame_recv_callback(nghttp2_session *session,
@@ -935,9 +942,7 @@ static int on_send_data_callback(nghttp2_session *session, nghttp2_frame *frame,
     return 0;
 }
 
-/* Send HTTP/2 client connection header, which includes 24 bytes
-   magic octets and SETTINGS frame */
-static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
+static int session_send_preface(ogs_sbi_session_t *sbi_sess)
 {
     int rv;
     nghttp2_settings_entry iv[1] = {
@@ -955,7 +960,7 @@ static int submit_server_connection_header(ogs_sbi_session_t *sbi_sess)
         return OGS_ERROR;
     }
 
-    return OGS_OK;
+    return session_send(sbi_sess);
 }
 
 static int session_send(ogs_sbi_session_t *sbi_sess)
