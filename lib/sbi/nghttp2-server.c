@@ -693,14 +693,35 @@ static int on_frame_recv_callback(nghttp2_session *session,
         return 0;
     }
 
+    request = stream->request;
+    ogs_assert(request);
+
     switch (frame->hd.type) {
-    case NGHTTP2_DATA:
     case NGHTTP2_HEADERS:
+        if (frame->headers.cat == NGHTTP2_HCAT_REQUEST) {
+            const char *expect100 =
+                ogs_sbi_header_get(request->http.headers, OGS_SBI_EXPECT);
+            if (expect100 && ogs_strcasecmp(expect100, "100-continue") == 0) {
+                nghttp2_nv nva;
+
+                add_header(&nva, ":status", status_string[100]);
+                rv = nghttp2_submit_headers(session, NGHTTP2_FLAG_NONE,
+                           stream->stream_id, NULL, &nva, 1, NULL);
+                if (rv != 0) {
+                    ogs_error("nghttp2_submit_headers() failed (%d:%s)",
+                            rv, nghttp2_strerror(rv));
+                    nghttp2_submit_rst_stream(
+                            session, NGHTTP2_FLAG_NONE, stream->stream_id, rv);
+                    return 0;
+                }
+            }
+        }
+        /* fallthrough */
+        OGS_GNUC_FALLTHROUGH;
+
+    case NGHTTP2_DATA:
         /* HEADERS or DATA frame with +END_STREAM flag */
         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-
-            request = stream->request;
-            ogs_assert(request);
 
             if (server->cb(request, stream) != OGS_OK) {
                 ogs_warn("server callback error");
