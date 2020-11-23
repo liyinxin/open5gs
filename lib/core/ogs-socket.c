@@ -240,17 +240,8 @@ ssize_t ogs_sendto(ogs_socket_t fd,
 
 ssize_t ogs_recv(ogs_socket_t fd, void *buf, size_t len, int flags)
 {
-    ssize_t size;
-
     ogs_assert(fd != INVALID_SOCKET);
-
-    size = recv(fd, buf, len, flags);
-    if (size < 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "recv(len:%d) failed", (int)len);
-    }
-
-    return size;
+    return recv(fd, buf, len, flags);
 }
 
 ssize_t ogs_recvfrom(ogs_socket_t fd,
