@@ -547,14 +547,15 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
             session_remove(sbi_sess);
         }
     } else {
-        if (n < 0)
+        if (n < 0) {
             if (errno != OGS_ECONNRESET)
                 ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
                                 "lost connection [%s]:%d",
                                 OGS_ADDR(addr, buf), OGS_PORT(addr));
-        else if (n == 0)
+        } else if (n == 0) {
             ogs_error("connection closed [%s]:%d",
                         OGS_ADDR(addr, buf), OGS_PORT(addr));
+        }
 
         session_remove(sbi_sess);
     }
