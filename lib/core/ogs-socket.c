@@ -247,20 +247,13 @@ ssize_t ogs_recv(ogs_socket_t fd, void *buf, size_t len, int flags)
 ssize_t ogs_recvfrom(ogs_socket_t fd,
         void *buf, size_t len, int flags, ogs_sockaddr_t *from)
 {
-    ssize_t size;
     socklen_t addrlen = sizeof(struct sockaddr_storage);
 
     ogs_assert(fd != INVALID_SOCKET);
     ogs_assert(from);
 
     memset(from, 0, sizeof *from);
-    size = recvfrom(fd, buf, len, flags, &from->sa, &addrlen);
-    if (size < 0) {
-        ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
-                "recvfrom(len:%d) failed", (int)len);
-    }
-
-    return size;
+    return recvfrom(fd, buf, len, flags, &from->sa, &addrlen);
 }
 
 int ogs_closesocket(ogs_socket_t fd)
