@@ -278,7 +278,8 @@ static void server_send_response(
     size_t nvlen;
     int i, rv;
     char datebuf[DATE_STRLEN];
-    char clen[32];
+    char srv_version[128];
+    char clen[128];
 
     ogs_assert(stream);
     sbi_sess = stream->session;
@@ -286,7 +287,7 @@ static void server_send_response(
     ogs_assert(sbi_sess->session);
     ogs_assert(response);
 
-    nvlen = 2; /* :status && date */
+    nvlen = 3; /* :status && server && date */
 
     for (hi = ogs_hash_first(response->http.headers);
             hi; hi = ogs_hash_next(hi))
@@ -304,6 +305,9 @@ static void server_send_response(
     ogs_assert(strlen(status_string[response->status]) == 3);
     add_header(&nva[i++], ":status", status_string[response->status]);
 
+    ogs_snprintf(srv_version, sizeof(srv_version),
+            "Open5GS %s", ogs_app()->version ? ogs_app()->version : "TEST");
+    add_header(&nva[i++], "server", srv_version);
     add_header(&nva[i++], "date", get_date_string(datebuf));
 
     if (response->http.content && response->http.content_length) {
