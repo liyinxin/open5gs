@@ -70,10 +70,6 @@ typedef struct ogs_sbi_session_s {
     int32_t                 last_stream_id;
 
     struct h2_settings      settings;
-
-    ogs_timer_t             *timer;
-
-    void *data;
 } ogs_sbi_session_t;
 
 typedef struct ogs_sbi_stream_s {
@@ -87,7 +83,6 @@ typedef struct ogs_sbi_stream_s {
 
 static void session_remove(ogs_sbi_session_t *sbi_sess);
 static void session_remove_all(ogs_sbi_server_t *server);
-static void session_timer_expired(void *data);
 
 static void stream_remove(ogs_sbi_stream_t *stream);
 
@@ -430,13 +425,6 @@ static ogs_sbi_session_t *session_add(
     ogs_assert(sbi_sess->addr);
     memcpy(sbi_sess->addr, &sock->remote_addr, sizeof(ogs_sockaddr_t));
 
-    sbi_sess->timer = ogs_timer_add(
-            ogs_app()->timer_mgr, session_timer_expired, sbi_sess);
-    ogs_assert(sbi_sess->timer);
-
-    ogs_timer_start(sbi_sess->timer,
-            ogs_app()->time.message.sbi.connection_deadline);
-
     ogs_list_add(&server->session_list, sbi_sess);
 
     return sbi_sess;
@@ -453,9 +441,6 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
     ogs_assert(server);
 
     ogs_list_remove(&server->session_list, sbi_sess);
-
-    ogs_assert(sbi_sess->timer);
-    ogs_timer_delete(sbi_sess->timer);
 
     stream_remove_all(sbi_sess);
 
@@ -477,17 +462,6 @@ static void session_remove(ogs_sbi_session_t *sbi_sess)
     ogs_sock_destroy(sbi_sess->sock);
 
     ogs_pool_free(&session_pool, sbi_sess);
-}
-
-static void session_timer_expired(void *data)
-{
-    ogs_sbi_session_t *sbi_sess = data;
-
-    ogs_assert(sbi_sess);
-
-    ogs_error("An HTTP was requested, but the HTTP response is missing.");
-
-    session_remove(sbi_sess);
 }
 
 static void session_remove_all(ogs_sbi_server_t *server)
