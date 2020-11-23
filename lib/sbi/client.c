@@ -309,6 +309,8 @@ static connection_t *connection_add(
     }
 
     curl_easy_setopt(conn->easy, CURLOPT_HTTPHEADER, conn->header_list);
+    curl_easy_setopt(conn->easy,
+            CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_PRIOR_KNOWLEDGE);
 
     if (ogs_hash_count(request->http.params)) {
         request->h.uri = add_params_to_uri(conn->easy,
