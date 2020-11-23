@@ -873,14 +873,9 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
         request->h.method = valuestr;
 
     } else {
-        /*
-         * toupper(namestr[0])
-         * e.g.) Content-type -> content-type
-         */
-        if (namestr[0] >= 'a' && namestr[0] <= 'z') {
-            namestr[0] = 'A' + namestr[0] - 'a';
-        }
+
         ogs_sbi_header_set(request->http.headers, namestr, valuestr);
+
     }
 
     ogs_free(namestr);
