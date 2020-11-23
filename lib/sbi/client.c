@@ -514,7 +514,7 @@ static size_t header_cb(void *ptr, size_t size, size_t nmemb, void *data)
     conn = data;
     ogs_assert(conn);
 
-    if (strncmp(ptr, OGS_SBI_LOCATION, strlen(OGS_SBI_LOCATION)) == 0) {
+    if (ogs_strncasecmp(ptr, OGS_SBI_LOCATION, strlen(OGS_SBI_LOCATION)) == 0) {
         /* ptr : "Location: http://xxx/xxx/xxx\r\n"
            We need to truncate "Location" + ": " + "\r\n" in 'ptr' string */
         int len = strlen(ptr) - strlen(OGS_SBI_LOCATION) - 2 - 2;
