@@ -558,7 +558,7 @@ static void recv_handler(short when, ogs_socket_t fd, void *data)
                                 "lost connection [%s]:%d",
                                 OGS_ADDR(addr, buf), OGS_PORT(addr));
         } else if (n == 0) {
-            ogs_error("connection closed [%s]:%d",
+            ogs_debug("connection closed [%s]:%d",
                         OGS_ADDR(addr, buf), OGS_PORT(addr));
         }
 
@@ -825,6 +825,7 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
         struct yuarel_param params[MAX_NUM_OF_PARAM_IN_QUERY+2];
         int j;
 
+        ogs_assert(request->h.uri == NULL);
         request->h.uri = ogs_sbi_parse_uri(valuestr, "?", &saveptr);
         ogs_assert(request->h.uri);
 
@@ -852,7 +853,8 @@ static int on_header(nghttp2_session *session, const nghttp2_frame *frame,
     } else if (namebuf.len == sizeof(METHOD) - 1 &&
             memcmp(METHOD, namebuf.base, namebuf.len) == 0) {
 
-        request->h.method = valuestr;
+        ogs_assert(request->h.method == NULL);
+        request->h.method = ogs_strdup(valuestr);
 
     } else {
 
@@ -877,6 +879,7 @@ static int on_data_chunk_recv(nghttp2_session *session, uint8_t flags,
 
     stream = nghttp2_session_get_stream_user_data(session, stream_id);
     if (!stream) {
+        ogs_error("no stream [%d]", stream_id);
         return 0;
     }
 
@@ -885,6 +888,7 @@ static int on_data_chunk_recv(nghttp2_session *session, uint8_t flags,
 
     ogs_assert(data);
     ogs_assert(len);
+    ogs_assert(request->http.content == NULL);
 
     request->http.content_length = len;
     request->http.content = (char*)ogs_malloc(request->http.content_length + 1);
