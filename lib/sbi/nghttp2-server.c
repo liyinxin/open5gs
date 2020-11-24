@@ -499,6 +499,7 @@ static void accept_handler(short when, ogs_socket_t fd, void *data)
     if (setsockopt(new->fd, IPPROTO_TCP, TCP_NODELAY, &on, sizeof(on)) != 0) {
         ogs_log_message(OGS_LOG_ERROR, ogs_socket_errno,
                 "setsockopt() for SCTP_NODELAY failed");
+        ogs_sock_destroy(new);
         return;
     }
 
