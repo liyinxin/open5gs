@@ -234,6 +234,8 @@ static ssize_t response_read_callback(nghttp2_session *session,
                                       nghttp2_data_source *source,
                                       void *user_data)
 {
+    int rv;
+
     ogs_sbi_response_t *response = NULL;
     ogs_sbi_stream_t *stream = NULL;
 
@@ -255,8 +257,10 @@ static ssize_t response_read_callback(nghttp2_session *session,
     *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
 
-    if (nghttp2_session_get_stream_remote_close(session, stream_id) == 0) {
-        ogs_error("nghttp2_session_get_stream_remote_close() failed");
+    rv = nghttp2_session_get_stream_remote_close(session, stream_id);
+    if (rv != 1) {
+        ogs_error("nghttp2_session_get_stream_remote_close() failed (rv = %d)",
+                    rv);
         nghttp2_submit_rst_stream(
                 session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_NO_ERROR);
     }
