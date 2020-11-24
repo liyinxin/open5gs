@@ -72,7 +72,7 @@ $ sudo pfctl -e -f /etc/pf.anchors/org.open5gs
 
 Install the depedencies for building the source code.
 ```bash
-$ brew install mongo-c-driver gnutls libgcrypt libidn libyaml nghttp2 libmicrohttpd curl pkg-config
+$ brew install mongo-c-driver gnutls libgcrypt libidn libyaml nghttp2 libmicrohttpd curl nghttp2 pkg-config
 ```
 
 Install Bison and Create soft link.
