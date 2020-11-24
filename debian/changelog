@@ -1,9 +1,3 @@
-open5gs (2.1.0) unstable; urgency=medium
-
-  * Use HTTP/2
-
- -- Sukchan Lee <acetcom@gmail.com>  Tue, 24 Nov 2020 16:46:03 +0000
-
 open5gs (2.0.21) unstable; urgency=medium
 
   * Bug Fixed
