@@ -259,7 +259,7 @@ static ssize_t response_read_callback(nghttp2_session *session,
 
     rv = nghttp2_session_get_stream_remote_close(session, stream_id);
     if (rv != 1) {
-        ogs_error("nghttp2_session_get_stream_remote_close() failed (rv = %d)",
+        ogs_warn("nghttp2_session_get_stream_remote_close() failed (rv = %d)",
                     rv);
         nghttp2_submit_rst_stream(
                 session, NGHTTP2_FLAG_NONE, stream_id, NGHTTP2_NO_ERROR);
