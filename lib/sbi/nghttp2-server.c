@@ -24,6 +24,10 @@
 #include <netinet/tcp.h>
 #include <nghttp2/nghttp2.h>
 
+#if 1
+#define SEND_DATA_WITH_COPY 1
+#endif
+
 static void server_init(int num_of_stream_pool);
 static void server_final(void);
 
@@ -234,7 +238,9 @@ static ssize_t response_read_callback(nghttp2_session *session,
                                       nghttp2_data_source *source,
                                       void *user_data)
 {
+#ifndef SEND_DATA_WITH_COPY
     int rv;
+#endif
 
     ogs_sbi_response_t *response = NULL;
     ogs_sbi_stream_t *stream = NULL;
@@ -254,9 +260,15 @@ static ssize_t response_read_callback(nghttp2_session *session,
     ogs_assert(response->http.content);
     ogs_assert(response->http.content_length);
 
+#ifndef SEND_DATA_WITH_COPY
     *data_flags |= NGHTTP2_DATA_FLAG_NO_COPY;
+#else
+    memcpy(buf, response->http.content, response->http.content_length);
+#endif
+
     *data_flags |= NGHTTP2_DATA_FLAG_EOF;
 
+#ifndef SEND_DATA_WITH_COPY
     rv = nghttp2_session_get_stream_remote_close(session, stream_id);
     if (rv == 0) {
         ogs_warn("nghttp2_session_get_stream_remote_close() failed");
@@ -265,6 +277,7 @@ static ssize_t response_read_callback(nghttp2_session *session,
     } else if (rv != 1) {
         ogs_error("nghttp2_session_get_stream_remote_close() failed[%d]", rv);
     }
+#endif
 
     return response->http.content_length;
 }
@@ -595,9 +608,14 @@ static int on_begin_frame(nghttp2_session *session,
 static int on_begin_headers(nghttp2_session *session,
                             const nghttp2_frame *frame,
                                      void *user_data);
+#ifndef SEND_DATA_WITH_COPY
 static int on_send_data(nghttp2_session *session, nghttp2_frame *frame,
                         const uint8_t *framehd, size_t length,
                         nghttp2_data_source *source, void *user_data);
+#else
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data);
+#endif
 
 static int session_set_callbacks(ogs_sbi_session_t *sbi_sess)
 {
@@ -638,7 +656,11 @@ static int session_set_callbacks(ogs_sbi_session_t *sbi_sess)
     nghttp2_session_callbacks_set_on_begin_headers_callback(
             callbacks, on_begin_headers);
 
+#ifndef SEND_DATA_WITH_COPY
     nghttp2_session_callbacks_set_send_data_callback(callbacks, on_send_data);
+#else
+    nghttp2_session_callbacks_set_send_callback(callbacks, send_callback);
+#endif
 
     rv = nghttp2_session_server_new(&sbi_sess->session, callbacks, sbi_sess);
     if (rv != 0) {
@@ -1016,6 +1038,28 @@ static int on_begin_headers(nghttp2_session *session,
     return 0;
 }
 
+static int session_send_preface(ogs_sbi_session_t *sbi_sess)
+{
+    int rv;
+    nghttp2_settings_entry iv[1] = {
+        { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
+    };
+
+    ogs_assert(sbi_sess);
+    ogs_assert(sbi_sess->session);
+
+    rv = nghttp2_submit_settings(
+            sbi_sess->session, NGHTTP2_FLAG_NONE, iv, OGS_ARRAY_SIZE(iv));
+    if (rv != 0) {
+        ogs_error("nghttp2_submit_settings() failed (%d:%s)",
+                    rv, nghttp2_strerror(rv));
+        return OGS_ERROR;
+    }
+
+    return session_send(sbi_sess);
+}
+
+#ifndef SEND_DATA_WITH_COPY
 static int on_send_data(nghttp2_session *session, nghttp2_frame *frame,
                         const uint8_t *framehd, size_t length,
                         nghttp2_data_source *source, void *user_data)
@@ -1070,35 +1114,47 @@ static int on_send_data(nghttp2_session *session, nghttp2_frame *frame,
 
     return 0;
 }
-
-static int session_send_preface(ogs_sbi_session_t *sbi_sess)
+#else
+static ssize_t send_callback(nghttp2_session *session, const uint8_t *data,
+                             size_t length, int flags, void *user_data)
 {
-    int rv;
-    nghttp2_settings_entry iv[1] = {
-        { NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS, 100 }
-    };
+    ogs_sbi_session_t *sbi_sess = user_data;
+    ogs_sock_t *sock = NULL;
+    ogs_socket_t fd = INVALID_SOCKET;
 
-    ogs_assert(sbi_sess);
-    ogs_assert(sbi_sess->session);
-
-    rv = nghttp2_submit_settings(
-            sbi_sess->session, NGHTTP2_FLAG_NONE, iv, OGS_ARRAY_SIZE(iv));
-    if (rv != 0) {
-        ogs_error("nghttp2_submit_settings() failed (%d:%s)",
-                    rv, nghttp2_strerror(rv));
-        return OGS_ERROR;
-    }
-
-    return session_send(sbi_sess);
-}
-
-static int session_send(ogs_sbi_session_t *sbi_sess)
-{
     ogs_pkbuf_t *pkbuf = NULL;
 
     ogs_assert(sbi_sess);
+    sock = sbi_sess->sock;
+    ogs_assert(sock);
+    fd = sock->fd;
+    ogs_assert(fd != INVALID_SOCKET);
+
+    ogs_assert(data);
+    ogs_assert(length);
+
+    pkbuf = ogs_pkbuf_alloc(NULL, length);
+    ogs_assert(pkbuf);
+    ogs_pkbuf_put_data(pkbuf, data, length);
+
+    session_write_to_buffer(sbi_sess, pkbuf);
+
+    return length;
+}
+#endif
+
+static int session_send(ogs_sbi_session_t *sbi_sess)
+{
+#ifndef SEND_DATA_WITH_COPY
+    ogs_pkbuf_t *pkbuf = NULL;
+#else
+    int rv;
+#endif
+
+    ogs_assert(sbi_sess);
     ogs_assert(sbi_sess->session);
 
+#ifndef SEND_DATA_WITH_COPY
     for (;;) {
         const uint8_t *data = NULL;
         ssize_t data_len;
@@ -1120,6 +1176,14 @@ static int session_send(ogs_sbi_session_t *sbi_sess)
 
         session_write_to_buffer(sbi_sess, pkbuf);
     }
+#else
+    rv = nghttp2_session_send(sbi_sess->session);
+    if (rv != 0) {
+        ogs_error("nghttp_session_send() failed (%d:%s)",
+                    rv, nghttp2_strerror(rv));
+        return OGS_ERROR;
+    }
+#endif
 
     return OGS_OK;
 }
